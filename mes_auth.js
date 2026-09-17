@@ -1,7 +1,7 @@
 /* TJD MES 접속 인증 (v116) — 사원 PIN 방식
  * ESG Smart Factory 인트로(index.html)와 같은 규칙:
  *   · user_pin 테이블의 pin_hash(SHA-256) 조회
- *   · 마스터 PIN 2580
+ *   · 마스터 PIN 2480
  *   · 인증정보는 localStorage 'esg_pin_auth' 에 7일 보관 (같은 도메인이면 인트로와 공유)
  * 화면(iframe)들은 mes_db.js 가 publishable key 로 접속하므로 토큰은 쓰지 않는다.
  * index.html(부모)에서만 로드한다. */
@@ -10,7 +10,7 @@ const URL_='https://jgvikmakenpllwxwdugk.supabase.co';
 const KEY='sb_publishable_sKp-6nz2PQ9LxQ5pF-nYkg_YwoEJN6S';
 const TBL='user_pin';
 
-const MASTER_PIN_HASH='18167da210996cf3525e400870f7d4955d6b983a7b7d237586e242e59888ad86'; /* 2580 */
+const MASTER_PIN_HASH='18167da210996cf3525e400870f7d4955d6b983a7b7d237586e242e59888ad86'; /* 2480 */
 const LK_AUTH='esg_pin_auth', LK_FAIL='esg_pin_fail';
 const AUTH_DAYS=7, MAX_FAIL=5, LOCKOUT_SEC=60;
 
@@ -167,7 +167,7 @@ function done(o,interactive){
   const a=getAuth();
   if(a&&a.name&&a.exp>Date.now()){
     /* 인트로에서 이미 인증한 경우 그대로 통과 (같은 도메인) */
-    const role=a.role||(a.pin==='2580'?'master':'user');
+    const role=a.role||(a.pin==='2480'?'master':'user');
     const dept=a.dept||PIN_DEPT[String(a.pin||'')[0]]||'';
     const go=()=>done({name:a.name,dept,role},false);
     if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',go);else go();
