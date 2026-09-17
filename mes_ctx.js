@@ -750,7 +750,11 @@ window.MESCTX={confirm:dlgConfirm};
  const NOZONE='#mesleBar,.mescb-pop,#meslk,#mesdlg';
  const auth=()=>{try{return window.MES_AUTH||window.parent.MES_AUTH||null}catch(e){return window.MES_AUTH||null}};
  const KEY='*';                                /* 전 사용자 공통 */
- const isMaster=()=>{const a=auth();return !!a&&a.role==='master'};
+ /* v116: 로그인 제거에 따라 '길게 눌러 배치 편집' 기능을 끈다.
+    저장된 배치(ui_layout)는 그대로 적용되고, 편집 진입만 막는다.
+    다시 켜려면 아래 EDIT_ENABLED 를 true 로 바꾼다. */
+ const EDIT_ENABLED=false;
+ const isMaster=()=>{if(!EDIT_ENABLED)return false;const a=auth();return !!a&&a.role==='master'};
  const isGrid=el=>{try{const d=getComputedStyle(el).display;return d==='grid'||d==='inline-grid'}catch(e){return false}};
  const visual=el=>el.__mescbBox?el.__mescbBox.wrap:el;
  const EID=el=>(el&&el.dataset&&el.dataset.leId)||(el&&el.id)||'';
