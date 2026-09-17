@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>사원 PIN 마이그레이션 (ESG → TJD MES)</title>
+<style>
+:root{--steel:#1f2a3a;--amber:#f5a623;--line:#dfe5ee;--bg:#f4f6fa}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;background:var(--bg);color:#222;padding:16px}
+.wrap{max-width:860px;margin:0 auto}
+h1{font-size:19px;color:var(--steel);margin-bottom:4px}
+.sub{font-size:12.5px;color:#667;margin-bottom:14px}
+.card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:14px}
+.card h2{font-size:14px;color:var(--steel);margin-bottom:10px;border-left:4px solid var(--amber);padding-left:8px}
+button{background:var(--steel);color:#fff;border:0;border-radius:8px;padding:11px 20px;font-size:14px;font-weight:700;cursor:pointer}
+button:hover{opacity:.9}
+button:disabled{background:#aab;cursor:not-allowed}
+button.ghost{background:#fff;color:var(--steel);border:1px solid var(--line)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+#log{background:#101826;color:#9fe3a8;font:12px/1.6 Consolas,monospace;border-radius:8px;padding:12px;min-height:120px;max-height:320px;overflow:auto;white-space:pre-wrap;margin-top:10px}
+table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:10px}
+th,td{border:1px solid var(--line);padding:6px 8px;text-align:left}
+th{background:#eef2f8;color:var(--steel)}
+.tbl-scroll{overflow-x:auto}
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;background:#e8f5e9;color:#2e7d32}
+input[type=file]{font-size:13px}
+@media(max-width:600px){body{padding:8px}button{width:100%}.row{flex-direction:column;align-items:stretch}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>사원 PIN 마이그레이션</h1>
+<div class="sub">ESG Smart Factory(user_pin) → TJD MES(신규 Supabase) 사원 데이터 복사. 실행 전 SQL 01~06 적용 필요.</div>
+
+<div class="card">
+<h2>1단계 · 원클릭 복사 (ESG → TJD)</h2>
+<div class="row">
+<button id="btnRun">▶ 사원 데이터 복사 실행</button>
+<button id="btnPreview" class="ghost">원본 미리보기</button>
+</div>
+<div id="log">대기 중...</div>
+</div>
+
+<div class="card">
+<h2>2단계 · CSV 업로드 (ESG 접속 불가 시 대체)</h2>
+<div class="sub">형식: name,pin,dept,position,emp_id (첫 줄 헤더 포함 가능)</div>
+<div class="row">
+<input type="file" id="csvFile" accept=".csv,text/csv">
+<button id="btnCsv" class="ghost">CSV로 등록</button>
+</div>
+</div>
+
+<div class="card">
+<h2>복사 결과</h2>
+<div class="tbl-scroll"><table id="tbl"><thead><tr><th>#</th><th>이름</th><th>부서</th><th>직위</th><th>사번</th><th>PIN</th><th>상태</th></tr></thead><tbody></tbody></table></div>
+</div>
+</div>
+
+<script>
+const SRC = { url:'https://omngtyewdaqpphnzeate.supabase.co', key:'sb_publishable_9j2YkkL-7ul1TrhH-NjVdQ_vWDG2-1D' };
+const DST = { url:'https://jgvikmakenpllwxwdugk.supabase.co', key:'sb_publishable_sKp-6nz2PQ9LxQ5pF-nYkg_YwoEJN6S' };
+const TBL='user_pin';
+const $=s=>document.querySelector(s);
+const log=m=>{const el=$('#log');el.textContent+=(el.textContent==='대기 중...'?'':'\n')+m;if(el.textContent==='대기 중...')el.textContent=m;el.scrollTop=el.scrollHeight};
+function clearLog(){$('#log').textContent=''}
+
+async function req(cfg, method, path, body){
+  const r = await fetch(cfg.url+'/rest/v1/'+path, {
+    method,
+    headers:{apikey:cfg.key, Authorization:'Bearer '+cfg.key, 'Content-Type':'application/json', Prefer: method==='POST'?'resolution=merge-duplicates,return=representation':'return=representation'},
+    body: body?JSON.stringify(body):undefined
+  });
+  if(!r.ok){ throw new Error(method+' '+path+' → '+r.status+' '+(await r.text()).slice(0,200)); }
+  const t=await r.text(); return t?JSON.parse(t):null;
+}
+
+// PIN 첫자리 → 부서 (ESG 규칙)
+const DEPT_BY_PIN={ '0':'대표','1':'개발팀','2':'생산팀','3':'설계팀','4':'품질관리팀','5':'영업관리팀','6':'공장장' };
+const DEPT_CODE={ '대표':'D00','개발팀':'D10','생산팀':'D20','설계팀':'D30','품질관리팀':'D40','영업관리팀':'D50','공장장':'D60' };
+
+async function fetchSrc(){
+  return await req(SRC,'GET',TBL+'?select=id,name,pin_hash,pin_plain,dept,position,emp_id&order=id');
+}
+
+function render(rows){
+  const tb=$('#tbl tbody'); tb.innerHTML='';
+  rows.forEach((r,i)=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${i+1}</td><td>${r.name||''}</td><td>${r.dept||''}</td><td>${r.position||''}</td><td>${r.emp_id||''}</td><td>${r.pin_plain||'••••'}</td><td><span class="badge">${r._st||'-'}</span></td>`;
+    tb.appendChild(tr);
+  });
+}
+
+async function sha256hex(s){
+  const b=await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+  return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('');
+}
+
+async function migrate(rows){
+  // 1) user_pin 복사
+  const pins=rows.map(r=>({name:r.name, pin_hash:r.pin_hash, pin_plain:r.pin_plain??null, dept:r.dept??(r.pin_plain?DEPT_BY_PIN[String(r.pin_plain)[0]]:null), position:r.position??null, emp_id:r.emp_id??null}));
+  await req(DST,'POST',TBL+'?on_conflict=name', pins);
+  log('user_pin '+pins.length+'건 복사 완료');
+  // 2) employees 등록 (employee_code=사번 없으면 PIN)
+  const emps=rows.map((r,i)=>({row_no:i+1, employee_code:(r.emp_id&&String(r.emp_id).trim())||String(r.pin_plain||r.name), employee_name:r.name, name_uncertain:false, source:'ESG user_pin', code_uncertain:!(r.emp_id&&String(r.emp_id).trim())}));
+  await req(DST,'POST','employees?on_conflict=employee_code', emps);
+  log('employees '+emps.length+'건 등록 완료');
+  rows.forEach(r=>r._st='완료');
+  render(rows);
+  log('── 마이그레이션 완료 ──');
+  log('※ 로그인 없이 바로 사용합니다. 사원 목록은 각 화면 담당자 선택에 반영됩니다.');
+}
+
+$('#btnPreview').onclick=async()=>{
+  clearLog(); log('ESG 원본 조회 중...');
+  try{ const rows=await fetchSrc(); log(rows.length+'건 조회됨'); render(rows); }
+  catch(e){ log('오류: '+e.message); }
+};
+
+$('#btnRun').onclick=async()=>{
+  clearLog(); $('#btnRun').disabled=true;
+  try{
+    log('ESG 원본 조회 중...');
+    const rows=await fetchSrc();
+    log(rows.length+'건 조회됨 → TJD로 복사 시작');
+    await migrate(rows);
+  }catch(e){ log('오류: '+e.message); }
+  $('#btnRun').disabled=false;
+};
+
+$('#btnCsv').onclick=async()=>{
+  const f=$('#csvFile').files[0];
+  if(!f){ alert('CSV 파일을 선택하세요'); return; }
+  clearLog();
+  const text=await f.text();
+  const lines=text.split(/\r?\n/).filter(l=>l.trim());
+  let rows=[];
+  for(const ln of lines){
+    const [name,pin,dept,position,emp_id]=ln.split(',').map(s=>(s||'').trim());
+    if(!name||name==='name'||name==='이름') continue;
+    rows.push({name, pin_plain:pin, pin_hash:await sha256hex(pin), dept:dept||DEPT_BY_PIN[String(pin)[0]]||null, position:position||null, emp_id:emp_id||null});
+  }
+  log('CSV '+rows.length+'건 파싱 → TJD 등록 시작');
+  try{ await migrate(rows); }catch(e){ log('오류: '+e.message); }
+};
+</script>
+</body>
+</html>
