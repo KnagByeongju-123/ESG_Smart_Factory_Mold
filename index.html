@@ -181,6 +181,7 @@ input,select{font:inherit}
         </button>
         <div class="dd-menu">
           <div class="hd" id="uHd">TJD MES</div>
+          <button id="btnLock">🔒 잠금 (PIN 재입력)</button>
         </div>
       </div>
       <div class="user"></div>
@@ -341,7 +342,6 @@ const APP={
         {name:'작업지시',items:['작업지시 관리','공정이력카드']}
       ],
       '공통':[
-        {name:'사용자',items:['사용자정보']},
         {name:'공통',items:['공정관리','부품관리','자재등록','설비등록','업체관리','사업부정보','아이템 관리','경비사유','금형타입관리','금형코드 매칭','기계사양관리']},
         {name:'검사',items:['검사구분','검사항목']},
         {name:'공지사항',items:['공지사항 등록']},
@@ -706,9 +706,12 @@ window.IPMES={APP,pageRegistry,get active(){return openTabs.get(activeId)||null}
 
 /* ---------- 사용자 (mes_auth.js 연동) ---------- */
 function syncUser(){
-  const a=window.MES_AUTH;const name=a?.name||'게스트';const role=a?.role==='master'?'마스터':a?.role==='admin'?'관리자':a?.session?'사용자':'미로그인';
-  $('#uName').textContent=name;$('#uRole').textContent=role;$('#uAv').textContent=String(name)[0].toUpperCase();$('#uHd').textContent=a?.session?.user?.email||'TJD MES';
+  const a=window.MES_AUTH;const name=a?.name||'미인증';
+  const role=a?.role==='master'?'마스터':(a?.dept||'사용자');
+  $('#uName').textContent=name;$('#uRole').textContent=role;$('#uAv').textContent=String(name)[0].toUpperCase();
+  $('#uHd').textContent=a?.name?(name+(a.dept?' · '+a.dept:'')):'TJD MES';
 }
+$('#btnLock').onclick=()=>{closeDd();if(confirm('잠금하고 PIN 입력 화면으로 돌아갈까요?'))window.MES_AUTH?.logout?.()};
 
 /* ---------- 선반입 ---------- */
 const _pf=new Set();
