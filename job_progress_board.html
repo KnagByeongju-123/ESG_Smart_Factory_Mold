@@ -1,0 +1,322 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>금형진척현황</title><style>
+:root{--line:#98a6b2;--line2:#c5d0d8;--blue:#2f75b5;--ink:#344757;--head1:#e8f1f8;--head2:#c8dbe9;
+--done:#2f7d4f;--doneb:#e2f1e8;--run:#b26a00;--runb:#fdf0d9;--wait:#93a1ab;--waitb:#f0f3f5;--late:#c0392b;--lateb:#fbeceb}
+*{box-sizing:border-box}html,body{height:100%;margin:0}
+body{font-family:"Malgun Gothic","맑은 고딕",Arial,sans-serif;font-size:12px;color:var(--ink);background:#fff;overflow:hidden}
+button,input,select{font:inherit;color:inherit}
+.screen{height:100%;display:flex;flex-direction:column;background:#fff}
+.title{height:48px;padding:8px 14px 5px;border-bottom:2px solid #3978ae;display:flex;align-items:center}
+.title h1{margin:0;font-size:22px;font-weight:500;color:#4b5c6a}.title h1:before{content:'◯';margin-right:6px;color:#8796a1}
+.title small{font-size:11px;color:#9ca7af;margin-left:12px}
+.filt{padding:7px 14px;background:#fafbfc;border-bottom:1px solid var(--line2);display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.filt .lb{font-weight:700;margin-left:6px}
+.field{height:27px;border:1px solid #b5c0c9;background:#fff;padding:0 6px;min-width:0}
+.btn{height:29px;min-width:62px;border:1px solid #9ba8b4;background:linear-gradient(#fff,#dfe6eb);cursor:pointer}
+.btn:hover{background:#fff}
+.btn.on{background:#2d75b7;color:#fff;border-color:#1d5a92}
+
+/* 요약 밴드 */
+.sum{display:flex;flex-wrap:wrap;gap:5px;padding:7px 14px;background:#f5f7f8;border-bottom:1px solid var(--line2);align-items:center}
+.pill{border:1px solid var(--line2);background:#fff;padding:3px 10px;cursor:pointer;display:flex;gap:6px;align-items:center;white-space:nowrap}
+.pill:hover{background:#edf6fd}
+.pill.on{background:#2d75b7;color:#fff;border-color:#1d5a92}
+.pill b{font-size:13px}
+.pill.late{border-color:#e2b3ae;background:var(--lateb);color:var(--late)}
+.pill.late.on{background:var(--late);color:#fff}
+
+/* 보드 */
+.board{flex:1;min-height:0;overflow:auto;padding:8px 14px 10px;background:#f7f9fa}
+.card{border:1px solid var(--line2);background:#fff;margin-bottom:7px}
+.card.late{border-left:4px solid var(--late)}
+.chead{display:flex;align-items:center;gap:11px;padding:9px 12px;border-bottom:1px solid #e6ecef;cursor:pointer}
+.chead:hover{background:#f4f9fd}
+.jno{font-size:18px;font-weight:700;color:#20456b;min-width:130px}
+.item{color:#34434f;font-size:14px;font-weight:600;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cust{color:#6e7c87;font-size:13px;max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tag{font-size:11px;border:1px solid var(--line2);padding:1px 6px;color:#5c6b76;background:#f4f7f9}
+.tag.out{border-color:#b9cfe2;background:#eaf3fa;color:#2a6191}
+.dday{margin-left:auto;display:flex;align-items:center;gap:8px}
+.dday .d{font-weight:700;font-size:14px}
+.dday .d.warn{color:var(--run)}.dday .d.bad{color:var(--late)}
+.bar{width:130px;height:12px;border:1px solid var(--line2);background:#eef2f4;position:relative}
+.bar i{display:block;height:100%;background:linear-gradient(#5aa0d8,#2f75b5)}
+.pctxt{width:44px;text-align:right;font-size:14px;font-weight:700;font-variant-numeric:tabular-nums;color:#5c6b76}
+
+/* 파이프라인 */
+.pipe{display:flex;flex-wrap:nowrap;gap:0;padding:12px 10px 6px;overflow-x:auto}
+.stp{position:relative;flex:1 1 0;min-width:96px;padding:11px 6px 10px 18px;text-align:center;background:#e3e8ec;color:#7a8791;
+ clip-path:polygon(0 0,calc(100% - 16px) 0,100% 50%,calc(100% - 16px) 100%,0 100%,16px 50%);margin-left:-12px}
+.stp:first-child{margin-left:0;clip-path:polygon(0 0,calc(100% - 16px) 0,100% 50%,calc(100% - 16px) 100%,0 100%);padding-left:8px}
+.stp b{display:block;font-size:16px;font-weight:700;letter-spacing:-.01em;line-height:1.2}
+.stp span{display:block;font-size:13px;margin-top:4px;font-weight:600}
+.stp.done{background:#3f8f5f;color:#fff}
+.stp.done span{color:#dcf3e4}
+.stp.run{background:#e3e8ec;color:#7a8791}
+.stp.here,.stp.run.here,.stp.wait.here{background:#e08a00;color:#fff;transform:scaleY(1.12);z-index:2;box-shadow:0 2px 6px rgba(0,0,0,.25)}
+.stp.here span{color:#fff5dd}
+.stp.here b:after{content:' ◀ 진행중';font-size:11px;font-weight:700;color:#fff;background:#b8321f;padding:1px 6px;border-radius:9px;margin-left:5px;vertical-align:2px}
+
+/* 다음 조치 */
+.next{display:flex;align-items:center;gap:10px;padding:8px 12px 12px;flex-wrap:wrap;background:#f9fbfc;border-top:1px solid #edf1f4}
+.owner{font-weight:700;color:#fff;background:#5b6e7d;padding:4px 12px;font-size:14px;border-radius:3px}
+.owner.영업{background:#2f6ea5}.owner.설계{background:#7a4fa3}.owner.구매{background:#1f7a63}
+.owner.가공{background:#a8621b}.owner.조립{background:#39627f}.owner.품질{background:#9c3b52}
+.ntxt{color:#25333f;font-size:14.5px;font-weight:600}
+.go{margin-left:auto;height:32px;font-size:13px;font-weight:700;padding:0 14px}
+.del{height:32px;font-size:13px;padding:0 12px;color:#8c2f2f;border-color:#d9aaa5;background:linear-gradient(#fff,#f7e6e4)}
+.del:hover{background:#fbeceb}
+
+/* 상세 */
+.det{border-top:1px dashed var(--line2);padding:8px 10px 10px;background:#fbfcfd}
+.det table{border-collapse:collapse;width:100%}
+.det th,.det td{border:1px solid #dde4e9;padding:3px 7px;font-size:11.5px}
+.det th{background:#eef3f7;color:#41586b;font-weight:700;white-space:nowrap;text-align:center;width:92px}
+.det td{background:#fff}
+.det td.c{text-align:center}
+.empty{padding:60px;text-align:center;color:#8a97a2}
+.foot{height:42px;display:flex;align-items:center;padding:5px 14px;border-top:1px solid var(--line);background:#eef2f5;gap:5px}
+.msg{margin-left:8px;color:#687784}.right{margin-left:auto;color:#7c8993}
+@media(max-width:980px){.item,.cust{display:none}.stp{min-width:84px}.stp b{font-size:14px}.stp span{font-size:12px}}
+</style></head><body>
+<div class="screen">
+ <div class="title"><h1>수주진척현황</h1><small>영업관리 · 수주</small></div>
+
+ <div class="filt">
+  <span class="lb" style="margin-left:0">제 번</span><input id="qJob" class="field" style="width:130px" oninput="apply()">
+  <span class="lb">품 명</span><input id="qItem" class="field" style="width:150px" oninput="apply()">
+  <span class="lb">고객사</span><input id="qCust" class="field" style="width:130px" oninput="apply()">
+  <span class="lb">정 렬</span>
+  <select id="qSort" class="field" style="width:130px" onchange="apply()">
+   <option value="due">납기 임박순</option>
+   <option value="pct">진척 낮은순</option>
+   <option value="pctd">진척 높은순</option>
+   <option value="job">제번순</option>
+  </select>
+  <label style="margin-left:8px"><input type="checkbox" id="qOpen" checked onchange="apply()"> 납품미완료</label>
+  <button class="btn" onclick="load()">⟳ 새로고침</button>
+  <button class="btn" onclick="expandAll(true)">▼ 전체펼침</button>
+  <button class="btn" onclick="expandAll(false)">▲ 접기</button>
+ </div>
+
+ <div class="sum" id="sum"></div>
+ <div class="board" id="board"></div>
+
+ <footer class="foot">
+  <button class="btn" onclick="load()">⌕ 조회</button>
+  <button class="btn" onclick="exportCsv()">▤ EXCEL</button>
+  <button class="btn" onclick="window.parent?.closeActive?.()">⊠ 닫기</button>
+  <span class="msg" id="message">제번 카드를 클릭하면 단계별 상세가 열립니다.</span>
+  <span class="right" id="countText"></span>
+ </footer>
+</div>
+
+<script>
+const STAGES=[
+ {k:'order',    n:'수주'},
+ {k:'plan',     n:'제작계획'},
+ {k:'design',   n:'설계'},
+ {k:'partlist', n:'PartList'},
+ {k:'purchase', n:'구매'},
+ {k:'machining',n:'가공'},
+ {k:'assembly', n:'조립'},
+ {k:'inspect',  n:'검사'},
+ {k:'tryout',   n:'T/O'},
+ {k:'delivery', n:'납품'}
+];
+const OWNERS=['영업','설계','구매','가공','조립','품질'];
+const SAMPLE=[];
+
+let rows=[...SAMPLE],view=[],fOwner='',fLate=false,open=new Set();
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const n0=v=>Number(v||0);
+const msg=t=>message.textContent=t;
+const online=()=>!!(window.MESDB&&MESDB.online);
+
+/* ── 조회 ────────────────────────────────── */
+async function load(){
+ if(!online()&&window.MESDB&&MESDB.ready){try{await MESDB.ready}catch(e){}}
+ if(!online()){apply();return msg('DB 미연결 - 예시 데이터를 표시합니다.')}
+ try{
+  const rs=await MESDB.table('job_progress_view').select('select=*&order=job_no');
+  rows=rs||[];apply();
+  msg(`${rows.length}건을 조회했습니다. (${new Date().toLocaleTimeString('ko-KR')})`);
+ }catch(e){msg('조회 실패: '+String(e.message||e).slice(0,120))}
+}
+
+/* ── 필터·정렬 ───────────────────────────── */
+function apply(){
+ const j=qJob.value.trim().toLowerCase(),i=qItem.value.trim().toLowerCase(),c=qCust.value.trim().toLowerCase();
+ const onlyOpen=qOpen.checked;
+ view=rows.filter(r=>{
+  if(j&&!String(r.job_no||'').toLowerCase().includes(j))return false;
+  if(i&&!((String(r.item_name||'')+' '+String(r.product_name||'')).toLowerCase().includes(i)))return false;
+  if(c&&!String(r.customer_name||'').toLowerCase().includes(c))return false;
+  if(onlyOpen&&r.st_delivery==='done')return false;
+  if(fOwner&&r.next_owner!==fOwner)return false;
+  if(fLate&&!(r.s1_overdue||r.delivery_overdue))return false;
+  return true;
+ });
+ const s=qSort.value;
+ const dd=r=>r.delivery_days_left==null?99999:Number(r.delivery_days_left);
+ view.sort((a,b)=>s==='pct'?n0(a.progress_pct)-n0(b.progress_pct)
+  :s==='pctd'?n0(b.progress_pct)-n0(a.progress_pct)
+  :s==='job'?String(a.job_no).localeCompare(String(b.job_no))
+  :dd(a)-dd(b));
+ render();
+}
+
+/* ── 요약 밴드 ───────────────────────────── */
+function renderSum(){
+ const late=rows.filter(r=>r.s1_overdue||r.delivery_overdue).length;
+ const cnt=o=>rows.filter(r=>r.next_owner===o).length;
+ sum.innerHTML=
+  `<span style="font-weight:700">다음 조치</span>`
+  +`<button class="pill${fOwner===''?' on':''}" onclick="setOwner('')">전체 <b>${rows.length}</b></button>`
+  +OWNERS.map(o=>`<button class="pill${fOwner===o?' on':''}" onclick="setOwner('${o}')">${o} <b>${cnt(o)}</b></button>`).join('')
+  +`<button class="pill late${fLate?' on':''}" style="margin-left:10px" onclick="setLate()">⚠ 지연 <b>${late}</b></button>`;
+}
+function setOwner(o){fOwner=(fOwner===o?'':o);apply()}
+function setLate(){fLate=!fLate;apply()}
+
+/* ── 카드 ────────────────────────────────── */
+function stageCell(r,st,here){
+ const v=r['st_'+st.k]||'wait';
+ let sub='';
+ if(st.k==='design'&&r.design_outsourced)sub=`외주 ${Math.round(n0(r.od_pct))}%`;
+ else if(st.k==='design')sub=n0(r.dsg_steps)?`${n0(r.dsg_done_steps)}/${n0(r.dsg_steps)}`:'';
+ else if(st.k==='partlist')sub=(n0(r.pl_mat)+n0(r.pl_pur))?`${n0(r.pl_mat)+n0(r.pl_pur)}건`:'';
+ else if(st.k==='purchase')sub=n0(r.buy_ord)?`${n0(r.buy_cfm)}/${n0(r.buy_ord)}`:'';
+ else if(st.k==='machining')sub=(n0(r.mac_ord)+n0(r.wo_cnt))?`${n0(r.mac_cfm)+n0(r.wo_done)}/${n0(r.mac_ord)+n0(r.wo_cnt)}`:'';
+ else if(st.k==='assembly')sub=n0(r.asm_steps)?`${n0(r.asm_done_steps)}/${n0(r.asm_steps)}`:(n0(r.set_ord)?'SET외주':'');
+ else if(st.k==='inspect')sub=n0(r.insp_cnt)?(n0(r.insp_ng)?`부적합 ${n0(r.insp_ng)}`:`${n0(r.insp_cnt)}건`):'';
+ else if(st.k==='tryout')sub=(v==='done'&&r.s1_completed_date)?String(r.s1_completed_date).slice(5):'';
+ else if(st.k==='delivery')sub=(v==='done'&&r.delivery_completed_date)?String(r.delivery_completed_date).slice(5):'';
+ if(!sub)sub=v==='done'?'완료':v==='run'?'진행':'대기';
+ return `<div class="stp ${v}${here?' here':''}"><b>${st.n}</b><span>${esc(sub)}</span></div>`;
+}
+function dueTxt(r){
+ if(r.st_delivery==='done')return '<span class="d" style="color:#2f7d4f">납품완료</span>';
+ const d=r.delivery_days_left;
+ if(d==null)return '<span class="d" style="color:#93a1ab">납기 미지정</span>';
+ const k=Number(d);
+ return `<span class="d ${k<0?'bad':k<=7?'warn':''}">납기 ${k<0?'D+'+(-k):'D-'+k}</span>`;
+}
+function render(){
+ board.innerHTML=view.length?view.map(r=>{
+  const p=n0(r.progress_pct);
+  const hereIdx=STAGES.findIndex(s=>(r['st_'+s.k]||'wait')!=='done');
+  const isOpen=open.has(r.job_no);
+  const late=r.s1_overdue||r.delivery_overdue;
+  return `<div class="card${late?' late':''}">
+   <div class="chead" onclick="toggle('${esc(r.job_no)}')">
+    <span class="jno">${esc(r.job_no)}</span>
+    <span class="item">${esc(r.product_name||r.item_name||'')}</span>
+    <span class="cust">${esc(r.customer_name||'')}</span>
+    ${!r.has_plan?'<span class="tag" style="color:#9aa5ad">계획 미등록</span>':r.design_outsourced?'<span class="tag out">설계 외주</span>':'<span class="tag">설계 사내</span>'}
+    ${r.s1_overdue?'<span class="tag" style="border-color:#e2b3ae;background:#fbeceb;color:#c0392b">T/O 지연</span>':''}
+    <span class="dday">${dueTxt(r)}
+     <span class="bar"><i style="width:${p}%"></i></span><span class="pctxt">${p}%</span></span>
+   </div>
+   <div class="pipe">${STAGES.map((s,i)=>stageCell(r,s,i===hereIdx)).join('')}</div>
+   <div class="next">
+    ${r.next_owner?`<span class="owner ${esc(r.next_owner)}">${esc(r.next_owner)}</span>`:'<span class="owner" style="background:#2f7d4f">완료</span>'}
+    <span class="ntxt">${esc(r.next_step||'')}</span>
+    ${r.next_screen?`<button class="btn go" onclick="event.stopPropagation();goScreen('${esc(r.next_screen)}')">↗ ${esc(r.next_screen)}</button>`:`<span class="go"></span>`}
+    ${canReset()?`<button class="btn del" onclick="event.stopPropagation();resetJob('${esc(r.job_no)}')">✕ 진행삭제</button>`:''}
+   </div>
+   ${isOpen?detail(r):''}
+  </div>`}).join('')
+ :'<div class="empty">조회 결과가 없습니다.</div>';
+ countText.textContent=`${view.length} / ${rows.length}건`;
+ renderSum();
+}
+function detail(r){
+ const d=v=>v?String(v).slice(0,10):'-';
+ return `<div class="det"><table>
+  <tr><th>설계</th><td>${r.design_outsourced?`외주 · ${esc(r.design_vendor||'업체 미지정')} · 발주 ${n0(r.od_cnt)}건 · 진척 ${Math.round(n0(r.od_pct))}%`
+      :`사내 · 세부공정 ${n0(r.dsg_done_steps)}/${n0(r.dsg_steps)} · 실적 ${n0(r.dsg_results)}건`}</td>
+      <th>계획</th><td class="c">${d(r.design_start_date)} ~ ${d(r.design_end_date)}</td>
+      <th>담당</th><td class="c">${esc(r.design_manager||'-')}</td></tr>
+  <tr><th>PartList</th><td>원재료 ${n0(r.pl_mat)}건 · 구매품 ${n0(r.pl_pur)}건</td>
+      <th>구매</th><td>발주 ${n0(r.buy_ord)} · 입고 ${n0(r.buy_rcv)} · 확정 ${n0(r.buy_cfm)}</td>
+      <th>미확정</th><td class="c">${n0(r.buy_ord)-n0(r.buy_cfm)}건</td></tr>
+  <tr><th>가공</th><td>외주 ${n0(r.mac_cfm)}/${n0(r.mac_ord)} 확정 · 작업지시 ${n0(r.wo_done)}/${n0(r.wo_cnt)}</td>
+      <th>계획</th><td class="c">${d(r.machining_start_date)} ~ ${d(r.machining_end_date)}</td>
+      <th>담당</th><td class="c">${esc(r.machining_manager||'-')}</td></tr>
+  <tr><th>조립</th><td>${n0(r.set_ord)?`SET외주 ${n0(r.set_rcv)}/${n0(r.set_ord)} · `:''}세부공정 ${n0(r.asm_done_steps)}/${n0(r.asm_steps)} · 검사 ${n0(r.insp_cnt)}건${n0(r.insp_ng)?` (부적합 ${n0(r.insp_ng)})`:''}</td>
+      <th>계획</th><td class="c">${d(r.assembly_start_date)} ~ ${d(r.assembly_end_date)}</td>
+      <th>담당</th><td class="c">${esc(r.assembly_manager||'-')}</td></tr>
+  <tr><th>T/O</th><td class="c">예정 ${d(r.s1_planned_date)} / 완료 ${d(r.s1_completed_date)}</td>
+      <th>납기</th><td class="c">예정 ${d(r.delivery_planned_date)} / 완료 ${d(r.delivery_completed_date)}</td>
+      <th>영업</th><td class="c">${esc(r.sales_manager||'-')}</td></tr>
+  <tr><th>수주가</th><td class="c">${n0(r.order_price).toLocaleString('ko-KR')}</td>
+      <th>목표원가</th><td class="c">${n0(r.target_price).toLocaleString('ko-KR')}</td>
+      <th>이익률</th><td class="c">${r.profit_rate_pct==null?'-':Number(r.profit_rate_pct).toFixed(1)+'%'}</td></tr>
+ </table></div>`;
+}
+function toggle(job){open.has(job)?open.delete(job):open.add(job);render()}
+function expandAll(on){open=on?new Set(view.map(r=>r.job_no)):new Set();render()}
+/* 진행삭제: 수주정보(제번)까지 포함해 그 제번의 모든 기록을 지운다 (관리자만) */
+function canReset(){try{const a=MESDB.auth&&MESDB.auth();const r=a&&a.role;return r==='master'||r==='admin'}catch(e){return false}}
+async function resetJob(job){
+ if(!online())return msg('DB 미연결 - 진행삭제를 사용할 수 없습니다.');
+ const ok=confirm(`[${job}] 을(를) 완전히 삭제합니다.\n\n삭제 대상: 수주정보(제번), 제작계획, 외주설계·원재료·구매품·외주가공 발주/입고, 설계계획·실적, PartList, 가공계획·작업지시·이력카드, 조립실적, 검사실적, SET발주, 경비\n\n되돌릴 수 없습니다. 계속할까요?`);
+ if(!ok)return;
+ const typed=prompt(`확인을 위해 제번을 그대로 입력하세요:\n${job}`);
+ if(typed===null){msg(`${job} 삭제를 취소했습니다. (아무것도 지워지지 않았습니다)`);return}
+ if(typed.trim()!==job){
+  alert(`입력한 제번이 다릅니다.\n\n입력: ${typed.trim()}\n대상: ${job}\n\n아무것도 삭제하지 않았습니다.`);
+  msg(`제번이 일치하지 않아 취소했습니다. (입력: ${typed.trim()} / 대상: ${job}) — 아무것도 지워지지 않았습니다.`);return}
+ try{
+  msg(`${job} 진행내용 삭제 중...`);
+  const r=await MESDB.rpc('mes_reset_job_progress',{p_job:job});
+  const tabs=r&&r.tables?Object.entries(r.tables).map(([k,v])=>`${k} ${v}`).join(', '):'';
+  try{MESDB.notify&&MESDB.notify(['jobs','sale_orders','sale_order_status_rows','sales_plans','sales_plan_status_rows','order_lines','design_plans','design_plan_steps','design_results','partlist_materials','partlist_purchases','assembly_jobs','assembly_steps','work_order_details','inspection_results','set_order_lines','expenses','sale_orders'])}catch(e){}
+  open.delete(job);
+  /* v80: 삭제 즉시 화면에서 지우고(낙관적 갱신) → DB 재조회 → 잠시 뒤 한 번 더.
+     RPC 는 여러 테이블을 지우므로 뷰 반영이 살짝 늦을 수 있다. */
+  rows=rows.filter(x=>x.job_no!==job);apply();
+  await load();
+  setTimeout(load,800);
+  /* v80: 정말로 지워졌는지 확인한다. 남아 있으면 조용히 넘어가지 않고 알린다 */
+  let left=0;
+  try{const chk=await MESDB.table('jobs').select(`select=job_no&job_no=eq.${encodeURIComponent(job)}`);left=(chk||[]).length}catch(e){}
+  if(left){
+   alert(`${job} 이(가) 아직 남아 있습니다. 삭제가 완전히 되지 않았습니다.`);
+   msg(`${job} 삭제가 완전히 되지 않았습니다. 화면을 새로고침한 뒤 다시 시도하세요.`);
+  }else{
+   msg(`${job} 을(를) 삭제했습니다. ${r&&r.deleted!=null?r.deleted+'건':''}`+(tabs?` (${tabs})`:''));
+  }
+ }catch(e){msg('진행삭제 실패: '+String(e.message||e).slice(0,140))}
+}
+function goScreen(name){
+ try{if(window.parent&&window.parent.openByName){window.parent.openByName(name);return}}catch(e){}
+ msg(`${name} 화면을 좌측 메뉴에서 열어주세요.`);
+}
+function exportCsv(){
+ const head=['제번','품명','고객사','설계구분','진척률','T/O예정','납기예정','다음담당','다음화면','다음할일',
+  ...STAGES.map(s=>s.n)];
+ const out=[head,...view.map(r=>[r.job_no,r.product_name||r.item_name,r.customer_name,
+  r.design_outsourced?'외주':'사내',n0(r.progress_pct)+'%',r.s1_planned_date||'',r.delivery_planned_date||'',
+  r.next_owner||'',r.next_screen||'',r.next_step||'',
+  ...STAGES.map(s=>({done:'완료',run:'진행',wait:'대기'}[r['st_'+s.k]||'wait']))])];
+ const csv='\ufeff'+out.map(a=>a.map(v=>'"'+String(v??'').replaceAll('"','""')+'"').join(',')).join('\n');
+ const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+ a.download='job_progress_board.csv';a.click();URL.revokeObjectURL(a.href);msg('CSV 파일을 생성했습니다.');
+}
+
+apply();
+window.MES=Object.assign(window.MES||{},{search:load,reload:load,exportCsv,setMessage:msg});
+/* 다른 화면에서 저장하면 자동 갱신 */
+(function(){let t=null;const go=()=>{clearTimeout(t);t=setTimeout(load,400)};
+ const bind=()=>{if(window.MESDB&&MESDB.onChange){MESDB.onChange(
+   ['sale_orders','sales_plans','order_lines','design_plans','design_plan_steps','design_results',
+    'partlist_materials','partlist_purchases','assembly_jobs','assembly_steps','work_order_details',
+    'inspection_results','set_order_lines'],go);return true}return false};
+ if(!bind()){let n=0;const iv=setInterval(()=>{if(bind()||++n>40)clearInterval(iv)},100)}})();
+setTimeout(load,300);
+setInterval(()=>{if(online())load()},300000);
+</script>
+<script src="mes_db.js?v=70"></script>
+<script src="mes_ctx.js?v=70"></script>
+</body></html>
