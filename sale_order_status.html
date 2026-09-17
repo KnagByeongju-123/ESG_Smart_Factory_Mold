@@ -135,7 +135,7 @@ async function openDetail(r){
    return `<div class="dl">${l}</div><div class="dv">${esc(v??'')}</div>`}).join('');
  let att='';
  if(Array.isArray(d.attachments)&&d.attachments.length){
-  att='<div class="dl">첨부파일</div><div class="dv">'+d.attachments.map(a=>`<a href="https://ipggvrzxfcryzryileuv.supabase.co/storage/v1/object/public/mes-attach/${a.path.split('/').map(encodeURIComponent).join('/')}" target="_blank">${esc(a.name)}</a>`).join('<br>')+'</div>';
+  att='<div class="dl">첨부파일</div><div class="dv">'+d.attachments.map(a=>`<a href="https://jgvikmakenpllwxwdugk.supabase.co/storage/v1/object/public/mes-attach/${a.path.split('/').map(encodeURIComponent).join('/')}" target="_blank">${esc(a.name)}</a>`).join('<br>')+'</div>';
  }
  dQBody.innerHTML=`<div class="dgrid">${rows}${att}</div>`;
  dQTitle.textContent=`수주 상세 - ${d.job_no}`;

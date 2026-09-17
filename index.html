@@ -328,7 +328,7 @@ const APP={
       {name:'사용메뉴얼',icon:'📖'}
     ],
     menus:{
-      '사용메뉴얼':[{name:'사용메뉴얼',items:['사용메뉴얼']},{name:'게시판',items:['수정요청게시판']},{name:'조직',items:['조직도']}]
+      '사용메뉴얼':[{name:'사용메뉴얼',items:['사용메뉴얼']},{name:'게시판',items:['수정요청게시판']}]
     }
   },
   '기준정보':{
@@ -469,10 +469,9 @@ const pageRegistry={
 '협력업체 등급현황':{id:'vendor_grade_status',file:'vendor_grade_status.html',title:'협력업체 등급현황'},
 '협력업체 인증현황':{id:'vendor_certificate_status',file:'vendor_certificate_status.html',title:'협력업체 인증현황'},
 '사용메뉴얼':{id:'user_manual',file:'user_manual.html',title:'사용메뉴얼'},
-'수정요청게시판':{id:'mod_request_board',file:'mod_request_board.html',title:'수정요청게시판'},
-'조직도':{id:'org_chart',file:'org_chart.html',title:'조직도'}
+'수정요청게시판':{id:'mod_request_board',file:'mod_request_board.html',title:'수정요청게시판'}
 };
-const MOD_ICON={'영업관리':'▣','설계관리':'✎','구매관리':'▤','조립관리':'⚙','원가관리':'◴','조직도':'⛶','SQ':'◈','기준정보':'▦','사용메뉴얼':'📖'};
+const MOD_ICON={'영업관리':'▣','설계관리':'✎','구매관리':'▤','조립관리':'⚙','원가관리':'◴','SQ':'◈','기준정보':'▦','사용메뉴얼':'📖'};
 const MOD_DESC={'영업관리':'수주 · 제작계획 · 설계외주 · 조립외주 · 경비','설계관리':'사내설계 · PARTLIST','구매관리':'원재료 · 구매품 · 가공/외주가공','조립관리':'사내조립 · 검사','원가관리':'제조원가 · 매입/매출 · 재고','SQ':'품질목표 · 심사 · 부적합 · 4M · 계측기 · 문서/도면 · 추적성','기준정보':'공정 · 부품 · 자재 · 설비 · 업체 · 사용자 · 단가','사용메뉴얼':'시스템 사용 안내'};
 const HOME={id:'home',title:'홈',file:null,home:true};
 
@@ -520,7 +519,6 @@ function buildTop(){
     });
     if(any){li.appendChild(mega);li.onmouseenter=()=>placeMega(li,mega);li.onmouseleave=()=>li.classList.remove('pin')}
     ul.appendChild(li);
-    /* 조직도는 상단메뉴에서 숨긴다 (사용메뉴얼 › 조직 › 조직도 로 접근) */
   });
 }
 

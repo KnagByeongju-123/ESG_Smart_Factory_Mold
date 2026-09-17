@@ -194,8 +194,8 @@ async function save(mode){
 
 /* ── v46 첨부파일: Supabase Storage(mes-attach) 업로드 ─────────── */
 const ATT=[];   /* {name,path,size,ext,note} */
-const SB_URL='https://ipggvrzxfcryzryileuv.supabase.co';
-const SB_KEY='sb_publishable_CHO-dAOU00HNwno52255mg_H3C1_vew';
+const SB_URL='https://jgvikmakenpllwxwdugk.supabase.co';
+const SB_KEY='sb_publishable_sKp-6nz2PQ9LxQ5pF-nYkg_YwoEJN6S';
 function sbTok(){try{return (window.MES_AUTH||window.parent.MES_AUTH)?.token||null}catch(e){return null}}
 function attUrl(p){return SB_URL+'/storage/v1/object/public/mes-attach/'+p.split('/').map(encodeURIComponent).join('/')}
 function fmtSize(n){return n>=1048576?(n/1048576).toFixed(1)+'MB':n>=1024?(n/1024).toFixed(1)+'KB':n+'B'}
