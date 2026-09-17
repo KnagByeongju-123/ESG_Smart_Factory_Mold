@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>IPTK MES</title>
-<link rel="preconnect" href="https://ipggvrzxfcryzryileuv.supabase.co" crossorigin>
-<link rel="dns-prefetch" href="https://ipggvrzxfcryzryileuv.supabase.co">
+<title>TJD MES</title>
+<link rel="preconnect" href="https://jgvikmakenpllwxwdugk.supabase.co" crossorigin>
+<link rel="dns-prefetch" href="https://jgvikmakenpllwxwdugk.supabase.co">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
 <style>
 :root{
@@ -156,8 +156,8 @@ input,select{font:inherit}
 <div class="app" id="app">
   <header class="top">
     <div class="brand" id="brand" title="홈">
-      <div class="mark">I</div>
-      <div class="name"><span class="home-lbl">⌂ 홈</span><small>IPTK MES</small></div>
+      <div class="mark">T</div>
+      <div class="name"><span class="home-lbl">⌂ 홈</span><small>TJD MES</small></div>
     </div>
 
     <ul class="top-menu" id="topMenu"></ul>
@@ -181,10 +181,7 @@ input,select{font:inherit}
           <span class="txt"><b id="uName">-</b><span id="uRole">-</span></span>
         </button>
         <div class="dd-menu">
-          <div class="hd" id="uHd">IPTK MES</div>
-          <button id="btnPw">비밀번호 변경</button>
-          <hr>
-          <button id="btnLogout">로그아웃</button>
+          <div class="hd" id="uHd">TJD MES</div>
         </div>
       </div>
       <div class="user"></div>
@@ -207,7 +204,7 @@ input,select{font:inherit}
       <button data-act="right">오른쪽 탭 닫기</button>
       <button data-act="close">닫기</button>
     </div>
-    <div class="crumb" id="crumb"><span>IPTK MES</span></div>
+    <div class="crumb" id="crumb"><span>TJD MES</span></div>
     <div class="stage" id="stage"><div class="vwait" id="vwait">화면을 여는 중…</div></div>
     <div class="status">
       <span><span class="dot"></span><span id="statusMsg">준비</span></span>
@@ -231,7 +228,7 @@ const APP={
     menus:{
       '수주':[{name:'수주',items:['수주등록','수주현황','금형진척현황','제번종합현황']}],
       '제작계획':[{name:'제작계획',items:['제작계획등록','제작계획현황']}],
-      /* v73: 일평기연은 외주 발주를 영업에서 관리한다. 제작계획에서 사내/외주를 정한 뒤 여기서 발주·입고 */
+      /* v73: 태진다이텍은 외주 발주를 영업에서 관리한다. 제작계획에서 사내/외주를 정한 뒤 여기서 발주·입고 */
       '설계외주':[{name:'설계외주',items:['외주설계발주등록','외주설계발주입고','외주설계발주현황']}],
       '조립외주':[{name:'조립외주',items:['SET외주제작등록','SET발주입고','SET발주현황']}],
       '경비':[{name:'경비',items:['경비등록','경비현황']}]
@@ -578,8 +575,8 @@ function openPage(p){if(!openTabs.has(p.id))openTabs.set(p.id,p);if(activeId!==p
 function activate(id){if(activeId!==id)prevId=activeId;activeId=id;const p=openTabs.get(id);if(p&&p.mod)activeModule=p.mod;buildTop();renderTabs();renderStage();renderCrumb();saveTabs()}
 function renderCrumb(){
   const p=openTabs.get(activeId);const c=$('#crumb');
-  if(!p){c.innerHTML='<span>IPTK MES</span>';return}
-  c.innerHTML=`<span>IPTK MES</span>${p.mod?`<span>›</span><span>${esc(p.mod)}</span><span>›</span><span>${esc(p.sec)}</span>`:''}<span>›</span><b>${esc(p.title)}</b><span class="right"><span>${p.file?esc(p.file):''}</span></span>`;
+  if(!p){c.innerHTML='<span>TJD MES</span>';return}
+  c.innerHTML=`<span>TJD MES</span>${p.mod?`<span>›</span><span>${esc(p.mod)}</span><span>›</span><span>${esc(p.sec)}</span>`:''}<span>›</span><b>${esc(p.title)}</b><span class="right"><span>${p.file?esc(p.file):''}</span></span>`;
 }
 
 /* ---------- 탭 ---------- */
@@ -715,10 +712,8 @@ window.IPMES={APP,pageRegistry,get active(){return openTabs.get(activeId)||null}
 /* ---------- 사용자 (mes_auth.js 연동) ---------- */
 function syncUser(){
   const a=window.MES_AUTH;const name=a?.name||'게스트';const role=a?.role==='master'?'마스터':a?.role==='admin'?'관리자':a?.session?'사용자':'미로그인';
-  $('#uName').textContent=name;$('#uRole').textContent=role;$('#uAv').textContent=String(name)[0].toUpperCase();$('#uHd').textContent=a?.session?.user?.email||'IPTK MES';
+  $('#uName').textContent=name;$('#uRole').textContent=role;$('#uAv').textContent=String(name)[0].toUpperCase();$('#uHd').textContent=a?.session?.user?.email||'TJD MES';
 }
-$('#btnPw').onclick=()=>{closeDd();document.getElementById('pwchg')?.click()};
-$('#btnLogout').onclick=()=>{closeDd();const b=document.getElementById('lgout');if(b)b.click();else{try{localStorage.removeItem('ipmes.session')}catch(e){}location.reload()}};
 
 /* ---------- 선반입 ---------- */
 const _pf=new Set();

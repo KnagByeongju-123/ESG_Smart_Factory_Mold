@@ -25,12 +25,12 @@
     setTimeout(function(){if(!window.__mesdbBound)window.__mesdbReady()},0)});
   /* v36: DNS/TLS 를 미리 열어 첫 REST 요청 지연 제거 */
   try{var lk=document.createElement('link');lk.rel='preconnect';lk.crossOrigin='';
-      lk.href='https://ipggvrzxfcryzryileuv.supabase.co';
+      lk.href='https://jgvikmakenpllwxwdugk.supabase.co';
       (document.head||document.documentElement).appendChild(lk)}catch(e){}
 })();
 
 const MES_VER='v75';window.MES_VER=MES_VER;
-const CFG={url:'https://ipggvrzxfcryzryileuv.supabase.co',key:'sb_publishable_CHO-dAOU00HNwno52255mg_H3C1_vew'};
+const CFG={url:'https://jgvikmakenpllwxwdugk.supabase.co',key:'sb_publishable_sKp-6nz2PQ9LxQ5pF-nYkg_YwoEJN6S'};
 function tok(){try{return (window.MES_AUTH||window.parent.MES_AUTH)?.token||null}catch(e){return null}}
 const H=()=>({'apikey':CFG.key,'Authorization':'Bearer '+(tok()||CFG.key),'Content-Type':'application/json'});
 /* ── v47: 에러로그 ──────────────────────────────────────────────
