@@ -184,9 +184,6 @@ a.menu-off,a.menu-off:hover{color:#9aa5ae!important;opacity:.55;cursor:not-allow
         </button>
         <div class="dd-menu">
           <div class="hd" id="uHd">IPTK MES</div>
-          <button id="btnPw">비밀번호 변경</button>
-          <hr>
-          <button id="btnLogout">로그아웃</button>
         </div>
       </div>
       <div class="user"></div>
@@ -718,11 +715,9 @@ window.IPMES={APP,pageRegistry,get active(){return openTabs.get(activeId)||null}
 
 /* ---------- 사용자 (mes_auth.js 연동) ---------- */
 function syncUser(){
-  const a=window.MES_AUTH;const name=a?.name||'게스트';const role=a?.role==='master'?'마스터':a?.role==='admin'?'관리자':a?.session?'사용자':'미로그인';
+  const a=window.MES_AUTH;const name=a?.name||'게스트';const role=a?.role==='master'?'마스터':a?.role==='admin'?'관리자':'사용자';
   $('#uName').textContent=name;$('#uRole').textContent=role;$('#uAv').textContent=String(name)[0].toUpperCase();$('#uHd').textContent=a?.session?.user?.email||'IPTK MES';
 }
-$('#btnPw').onclick=()=>{closeDd();document.getElementById('pwchg')?.click()};
-$('#btnLogout').onclick=()=>{closeDd();const b=document.getElementById('lgout');if(b)b.click();else{try{localStorage.removeItem('ipmes.session')}catch(e){}location.reload()}};
 
 /* ---------- 선반입 ---------- */
 const _pf=new Set();
@@ -730,7 +725,7 @@ function prefetch(url){if(!url||_pf.has(url))return;_pf.add(url);
   try{const l=document.createElement('link');l.rel='prefetch';l.href=url;l.as='document';document.head.appendChild(l)}catch(e){}
   try{fetch(url,{cache:'force-cache'}).catch(()=>{})}catch(e){}}
 (window.requestIdleCallback||(f=>setTimeout(f,1200)))(()=>{
-  ['mes_db.js?v='+APP_VER,'mes_ctx.js?v='+APP_VER,'mes_lookup.js?v='+APP_VER,'mes_paste.js?v='+APP_VER,'mes_auth.js?v='+APP_VER].forEach(prefetch);
+  ['mes_db.js?v='+APP_VER,'mes_ctx.js?v='+APP_VER,'mes_lookup.js?v='+APP_VER,'mes_paste.js?v='+APP_VER].forEach(prefetch);
   let i=0;const hot=['sale_order_status.html','purchase_order_input.html','purchase_order_status.html','material_order_input.html','outsourcing_order_input.html','vendor_management.html','status_board.html'];
   const step=()=>{if(i>=hot.length)return;prefetch(hot[i++]+'?v='+APP_VER);setTimeout(step,600)};step()});
 
@@ -743,7 +738,5 @@ function saveTabs(){try{const names=[...openTabs.values()].filter(p=>!p.home&&p.
 function restoreTabs(raw){try{const st=JSON.parse(raw||'null');if(!st||!st.names||!st.names.length)return;st.names.forEach(n=>{if(pageRegistry[n]&&pageRegistry[n].file)openByName(n)});if(st.active&&pageRegistry[st.active])openByName(st.active);else openPage(HOME)}catch(e){}}
 const _tabs=(()=>{try{return sessionStorage.getItem('ipmes.tabs')}catch(e){return null}})();buildTop();renderFav();syncUser();openPage(HOME);restoreTabs(_tabs);tick();setInterval(tick,1000);
 </script>
-<script>document.write('<script src="mes_auth.js?v='+APP_VER+'"><\/script>')</script>
-<script>window.addEventListener("mes-auth-ready",()=>{try{VREADY.clear();buildTop();renderFav();syncUser();const h=document.getElementById('view_home');if(h)h.innerHTML=homeHTML();renderStage()}catch(e){}});</script>
 </body>
 </html>
