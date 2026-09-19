@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>TJD MES</title>
-<link rel="preconnect" href="https://jgvikmakenpllwxwdugk.supabase.co" crossorigin>
-<link rel="dns-prefetch" href="https://jgvikmakenpllwxwdugk.supabase.co">
+<title>IPTK MES</title>
+<link rel="preconnect" href="https://ipggvrzxfcryzryileuv.supabase.co" crossorigin>
+<link rel="dns-prefetch" href="https://ipggvrzxfcryzryileuv.supabase.co">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
 <style>
 :root{
@@ -31,6 +31,7 @@ input,select{font:inherit}
 /* top */
 .brand{height:100%;display:flex;align-items:center;gap:10px;padding:0 16px 0 14px;flex-shrink:0;cursor:pointer;border-right:1px solid var(--line-2)}
 .brand .mark{width:28px;height:28px;flex-shrink:0;display:grid;place-items:center;background:var(--amber);color:var(--steel);font-weight:800;border-radius:6px}
+.brand .mark.tj{width:32px;font-size:13px;letter-spacing:-.5px;font-family:Arial,"Malgun Gothic",sans-serif}
 .brand .name{font-weight:700;letter-spacing:.3px;white-space:nowrap;color:#fff;display:flex;align-items:center;gap:8px}
 .brand .name .home-lbl{font-size:14px;color:#fff}
 .brand:hover .name .home-lbl{color:var(--amber)}
@@ -149,6 +150,7 @@ input,select{font:inherit}
 
 @media (max-width:1100px){.modcard{grid-template-columns:repeat(2,1fr)}.home>.card{grid-column:span 12!important}}
 @media (max-width:900px){.top-menu,.ubtn .txt{display:none}.search{width:170px}}
+a.menu-off,a.menu-off:hover{color:#9aa5ae!important;opacity:.55;cursor:not-allowed!important;background:none!important;text-decoration:none}
 </style>
 </head>
 <body>
@@ -156,8 +158,8 @@ input,select{font:inherit}
 <div class="app" id="app">
   <header class="top">
     <div class="brand" id="brand" title="홈">
-      <div class="mark">T</div>
-      <div class="name"><span class="home-lbl">⌂ 홈</span><small>TJD MES</small></div>
+      <div class="mark tj" title="TJ">TJ</div>
+      <div class="name"><span class="home-lbl">⌂ 홈</span><small>IPTK MES</small></div>
     </div>
 
     <ul class="top-menu" id="topMenu"></ul>
@@ -170,6 +172,7 @@ input,select{font:inherit}
     </div>
 
     <div class="top-actions">
+      <button class="icon-btn txt" id="btnReq" title="수정요청게시판">✎<span>수정요청</span></button>
       <div class="dd" id="ddFav">
         <button class="icon-btn" title="즐겨찾기">★</button>
         <div class="dd-menu" id="favMenu"></div>
@@ -180,8 +183,10 @@ input,select{font:inherit}
           <span class="txt"><b id="uName">-</b><span id="uRole">-</span></span>
         </button>
         <div class="dd-menu">
-          <div class="hd" id="uHd">TJD MES</div>
-          <button id="btnLock">🔒 잠금 (PIN 재입력)</button>
+          <div class="hd" id="uHd">IPTK MES</div>
+          <button id="btnPw">비밀번호 변경</button>
+          <hr>
+          <button id="btnLogout">로그아웃</button>
         </div>
       </div>
       <div class="user"></div>
@@ -204,7 +209,7 @@ input,select{font:inherit}
       <button data-act="right">오른쪽 탭 닫기</button>
       <button data-act="close">닫기</button>
     </div>
-    <div class="crumb" id="crumb"><span>TJD MES</span></div>
+    <div class="crumb" id="crumb"><span>IPTK MES</span></div>
     <div class="stage" id="stage"><div class="vwait" id="vwait">화면을 여는 중…</div></div>
     <div class="status">
       <span><span class="dot"></span><span id="statusMsg">준비</span></span>
@@ -215,7 +220,7 @@ input,select{font:inherit}
 </div>
 
 <script>
-const APP_VER='115';
+const APP_VER='116';
 const APP={
   '영업관리':{
     secondary:[
@@ -228,7 +233,7 @@ const APP={
     menus:{
       '수주':[{name:'수주',items:['수주등록','수주현황','금형진척현황','제번종합현황']}],
       '제작계획':[{name:'제작계획',items:['제작계획등록','제작계획현황']}],
-      /* v73: 태진다이텍은 외주 발주를 영업에서 관리한다. 제작계획에서 사내/외주를 정한 뒤 여기서 발주·입고 */
+      /* v73: 일평기연은 외주 발주를 영업에서 관리한다. 제작계획에서 사내/외주를 정한 뒤 여기서 발주·입고 */
       '설계외주':[{name:'설계외주',items:['외주설계발주등록','외주설계발주입고','외주설계발주현황']}],
       '조립외주':[{name:'조립외주',items:['SET외주제작등록','SET발주입고','SET발주현황']}],
       '경비':[{name:'경비',items:['경비등록','경비현황']}]
@@ -252,15 +257,13 @@ const APP={
     ],
     menus:{
       '원재료':[
-        {name:'원재료',items:['원재료 발주','원재료 입고','원재료 입고확정']},
-        {name:'현황',items:['원재료 발주현황']}
+        {name:'원재료',items:['원재료 발주','원재료 발주현황','원재료 입고','원재료 입고확정']}
       ],
       '구매품':[
-        {name:'구매품',items:['구매품 발주','구매품 입고','구매품 입고확정']},
-        {name:'현황',items:['구매품 발주현황']}
+        {name:'구매품',items:['구매품 발주','구매품 발주현황','구매품 입고','구매품 입고확정']}
       ],
       '가공':[
-        {name:'가공',items:['가공계획등록']},
+        {name:'가공',items:['가공계획등록','공정이력카드']},
         {name:'외주가공',items:['외주가공 발주','외주가공 입고','외주가공 입고확정','외주가공 QR스캔']},
         {name:'현황',items:['외주가공발주현황','외주가공 진척현황']}
       ]
@@ -328,7 +331,7 @@ const APP={
       {name:'사용메뉴얼',icon:'📖'}
     ],
     menus:{
-      '사용메뉴얼':[{name:'사용메뉴얼',items:['사용메뉴얼']}]
+      '사용메뉴얼':[{name:'사용메뉴얼',items:['사용메뉴얼']},{name:'게시판',items:['수정요청게시판']},{name:'조직',items:['조직도']}]
     }
   },
   '기준정보':{
@@ -342,6 +345,7 @@ const APP={
         {name:'작업지시',items:['작업지시 관리','공정이력카드']}
       ],
       '공통':[
+        {name:'사용자',items:['사용자정보']},
         {name:'공통',items:['공정관리','부품관리','자재등록','설비등록','업체관리','사업부정보','아이템 관리','경비사유','금형타입관리','금형코드 매칭','기계사양관리']},
         {name:'검사',items:['검사구분','검사항목']},
         {name:'공지사항',items:['공지사항 등록']},
@@ -467,9 +471,11 @@ const pageRegistry={
 '협력업체 인증서등록':{id:'vendor_certificate_input',file:'vendor_certificate_input.html',title:'협력업체 인증서등록'},
 '협력업체 등급현황':{id:'vendor_grade_status',file:'vendor_grade_status.html',title:'협력업체 등급현황'},
 '협력업체 인증현황':{id:'vendor_certificate_status',file:'vendor_certificate_status.html',title:'협력업체 인증현황'},
-'사용메뉴얼':{id:'user_manual',file:'user_manual.html',title:'사용메뉴얼'}
+'사용메뉴얼':{id:'user_manual',file:'user_manual.html',title:'사용메뉴얼'},
+'수정요청게시판':{id:'mod_request_board',file:'mod_request_board.html',title:'수정요청게시판'},
+'조직도':{id:'org_chart',file:'org_chart.html',title:'조직도'}
 };
-const MOD_ICON={'영업관리':'▣','설계관리':'✎','구매관리':'▤','조립관리':'⚙','원가관리':'◴','SQ':'◈','기준정보':'▦','사용메뉴얼':'📖'};
+const MOD_ICON={'영업관리':'▣','설계관리':'✎','구매관리':'▤','조립관리':'⚙','원가관리':'◴','조직도':'⛶','SQ':'◈','기준정보':'▦','사용메뉴얼':'📖'};
 const MOD_DESC={'영업관리':'수주 · 제작계획 · 설계외주 · 조립외주 · 경비','설계관리':'사내설계 · PARTLIST','구매관리':'원재료 · 구매품 · 가공/외주가공','조립관리':'사내조립 · 검사','원가관리':'제조원가 · 매입/매출 · 재고','SQ':'품질목표 · 심사 · 부적합 · 4M · 계측기 · 문서/도면 · 추적성','기준정보':'공정 · 부품 · 자재 · 설비 · 업체 · 사용자 · 단가','사용메뉴얼':'시스템 사용 안내'};
 const HOME={id:'home',title:'홈',file:null,home:true};
 
@@ -499,7 +505,9 @@ function locate(name){
   for(const mod of MODULES)for(const [sec,gs] of Object.entries(APP[mod]?.menus||{}))for(const g of gs)if(g.items.includes(name))return{mod,sec,group:g.name};
   return null;
 }
-function flatMenu(){const out=[];for(const mod of visibleModules())for(const sec of (APP[mod]?.secondary||[]))for(const g of groupsOf(mod,sec.name))for(const n of g.items)out.push({name:n,mod,sec:sec.name,group:g.name});return out}
+/* v116: 메뉴 비활성화 — 목록에는 흐리게 남기고 열리지 않게 한다 (외주가공은 QR스캔·외주가공 발주 화면에서 입고/입고확정 처리) */
+const MENU_OFF=new Set(['외주가공 입고','외주가공 입고확정']);
+function flatMenu(){const out=[];for(const mod of visibleModules())for(const sec of (APP[mod]?.secondary||[]))for(const g of groupsOf(mod,sec.name))for(const n of g.items)if(!MENU_OFF.has(n))out.push({name:n,mod,sec:sec.name,group:g.name});return out}
 
 /* ---------- 상단 모듈 메뉴 (메가) ---------- */
 function buildTop(){
@@ -517,6 +525,7 @@ function buildTop(){
     });
     if(any){li.appendChild(mega);li.onmouseenter=()=>placeMega(li,mega);li.onmouseleave=()=>li.classList.remove('pin')}
     ul.appendChild(li);
+    /* 조직도는 상단메뉴에서 숨긴다 (사용메뉴얼 › 조직 › 조직도 로 접근) */
   });
 }
 
@@ -538,6 +547,7 @@ const MENU_LABEL={
   'SET외주제작등록':'조립외주발주','SET발주입고':'조립외주입고','SET발주현황':'조립외주현황',
   '경비등록':'경비등록','경비현황':'경비현황'};
 function menuLink(n){
+  if(MENU_OFF.has(n)){const a=el('a','menu-off',`<span title="사용하지 않는 메뉴입니다">${esc(MENU_LABEL[n]||n)}</span>`);a.href='#';a.onclick=e=>{e.preventDefault();e.stopPropagation()};return a}
   const p=pageRegistry[n];const on=p&&p.id===activeId;
   const a=el('a',on?'active':'',`<span title="${esc(n)}">${esc(MENU_LABEL[n]||n)}</span><span class="star ${favs.includes(n)?'on':''}" title="즐겨찾기">★</span>`);
   a.href='#';a.dataset.name=n;a.onclick=e=>{e.preventDefault();openByName(n);document.querySelectorAll('.top-menu>li.pin').forEach(x=>x.classList.remove('pin'))};
@@ -562,6 +572,7 @@ function renderFav(){
 /* ---------- 페이지 열기 ---------- */
 function slugify(name){return 'pending_'+Math.abs([...name].reduce((a,c)=>((a<<5)-a+c.charCodeAt(0))|0,0))}
 function openByName(name){
+  if(MENU_OFF.has(name)){statusMsg.textContent=`${name} 메뉴는 사용하지 않습니다.`;return}
   let p=pageRegistry[name];if(!p){p={id:slugify(name),title:name,file:null};pageRegistry[name]=p}
   const loc=locate(name);if(loc){p.menu=name;p.mod=loc.mod;p.sec=loc.sec;if(loc.mod!==activeModule){activeModule=loc.mod;buildTop()}}
   openPage(p);
@@ -571,8 +582,8 @@ function openPage(p){if(!openTabs.has(p.id))openTabs.set(p.id,p);if(activeId!==p
 function activate(id){if(activeId!==id)prevId=activeId;activeId=id;const p=openTabs.get(id);if(p&&p.mod)activeModule=p.mod;buildTop();renderTabs();renderStage();renderCrumb();saveTabs()}
 function renderCrumb(){
   const p=openTabs.get(activeId);const c=$('#crumb');
-  if(!p){c.innerHTML='<span>TJD MES</span>';return}
-  c.innerHTML=`<span>TJD MES</span>${p.mod?`<span>›</span><span>${esc(p.mod)}</span><span>›</span><span>${esc(p.sec)}</span>`:''}<span>›</span><b>${esc(p.title)}</b><span class="right"><span>${p.file?esc(p.file):''}</span></span>`;
+  if(!p){c.innerHTML='<span>IPTK MES</span>';return}
+  c.innerHTML=`<span>IPTK MES</span>${p.mod?`<span>›</span><span>${esc(p.mod)}</span><span>›</span><span>${esc(p.sec)}</span>`:''}<span>›</span><b>${esc(p.title)}</b><span class="right"><span>${p.file?esc(p.file):''}</span></span>`;
 }
 
 /* ---------- 탭 ---------- */
@@ -670,7 +681,7 @@ function homeHTML(){
   <div class="card" style="grid-column:span 8"><h3>바로가기</h3>
    <div class="quick">${quick.filter(n=>{const l=locate(n);return l&&canView(l.mod+'/'+l.sec+'/'+n)}).map(n=>`<button onclick="openByName('${esc(n)}')"><span style="font-size:18px">${MOD_ICON[locate(n).mod]}</span>${esc(n)}</button>`).join('')}</div></div>
   <div class="card" style="grid-column:span 4"><h3>안내</h3>
-   <div style="color:var(--ink-2);line-height:1.7">· <b>Ctrl+K</b> 메뉴 검색<br>· 좌측 상단 <b>⌂ 홈</b> 클릭: 이 홈 화면으로 이동<br>· 상단 메뉴(영업관리 등)에 마우스를 올리면 세부 메뉴가 펼쳐지고, <b>클릭</b>하면 마우스를 떼도 펼쳐진 채로 고정됩니다 (다시 클릭하면 해제)<br>· 열린 화면은 상단에 <b>탭</b>으로 쌓입니다. 탭을 <b>마우스 오른쪽 클릭</b>하면 고정(실수로 닫히지 않게) · 새로고침 · 닫기 메뉴가 나옵니다<br>· 탭을 <b>마우스 휠 버튼</b>으로 누르면 바로 닫힙니다<br>· <button onclick="openByName('사용메뉴얼')" style="color:var(--blue)">사용메뉴얼 열기</button></div></div>
+   <div style="color:var(--ink-2);line-height:1.7">· <b>Ctrl+K</b> 메뉴 검색<br>· 좌측 상단 <b>⌂ 홈</b> 클릭: 이 홈 화면으로 이동<br>· 상단 메뉴(영업관리 등)에 마우스를 올리면 세부 메뉴가 펼쳐지고, <b>클릭</b>하면 마우스를 떼도 펼쳐진 채로 고정됩니다 (다시 클릭하면 해제)<br>· 열린 화면은 상단에 <b>탭</b>으로 쌓입니다. 탭을 <b>마우스 오른쪽 클릭</b>하면 고정(실수로 닫히지 않게) · 새로고침 · 닫기 메뉴가 나옵니다<br>· 탭을 <b>마우스 휠 버튼</b>으로 누르면 바로 닫힙니다<br>· <button onclick="openByName('사용메뉴얼')" style="color:var(--blue)">사용메뉴얼 열기</button><br>· <button onclick="openByName('수정요청게시판')" style="color:var(--blue)">수정요청게시판 열기</button></div></div>
   </div>`;
 }
 
@@ -701,17 +712,17 @@ document.addEventListener('click',e=>{
   if(!e.target.closest('.dd'))closeDd();if(!e.target.closest('.ctx'))ctx.classList.remove('open');if(!e.target.closest('.search'))sRes.classList.remove('open');if(e.target.isConnected&&!e.target.closest('.top-menu'))document.querySelectorAll('.top-menu>li.pin').forEach(x=>x.classList.remove('pin'));
 });
 $('#brand').onclick=()=>openPage(HOME);
+$('#btnReq').onclick=()=>openByName('수정요청게시판');
 /* 화면(iframe)에서 참조: 메뉴구조 · 현재 탭 */
 window.IPMES={APP,pageRegistry,get active(){return openTabs.get(activeId)||null},get prev(){return openTabs.get(prevId)||null}};
 
 /* ---------- 사용자 (mes_auth.js 연동) ---------- */
 function syncUser(){
-  const a=window.MES_AUTH;const name=a?.name||'미인증';
-  const role=a?.role==='master'?'마스터':(a?.dept||'사용자');
-  $('#uName').textContent=name;$('#uRole').textContent=role;$('#uAv').textContent=String(name)[0].toUpperCase();
-  $('#uHd').textContent=a?.name?(name+(a.dept?' · '+a.dept:'')):'TJD MES';
+  const a=window.MES_AUTH;const name=a?.name||'게스트';const role=a?.role==='master'?'마스터':a?.role==='admin'?'관리자':a?.session?'사용자':'미로그인';
+  $('#uName').textContent=name;$('#uRole').textContent=role;$('#uAv').textContent=String(name)[0].toUpperCase();$('#uHd').textContent=a?.session?.user?.email||'IPTK MES';
 }
-$('#btnLock').onclick=()=>{closeDd();if(confirm('잠금하고 PIN 입력 화면으로 돌아갈까요?'))window.MES_AUTH?.logout?.()};
+$('#btnPw').onclick=()=>{closeDd();document.getElementById('pwchg')?.click()};
+$('#btnLogout').onclick=()=>{closeDd();const b=document.getElementById('lgout');if(b)b.click();else{try{localStorage.removeItem('ipmes.session')}catch(e){}location.reload()}};
 
 /* ---------- 선반입 ---------- */
 const _pf=new Set();
