@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>IPTK MES</title>
+<title>MOLD</title>
 <link rel="preconnect" href="https://ipggvrzxfcryzryileuv.supabase.co" crossorigin>
 <link rel="dns-prefetch" href="https://ipggvrzxfcryzryileuv.supabase.co">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
@@ -159,7 +159,7 @@ a.menu-off,a.menu-off:hover{color:#9aa5ae!important;opacity:.55;cursor:not-allow
   <header class="top">
     <div class="brand" id="brand" title="홈">
       <div class="mark tj" title="TJ">TJ</div>
-      <div class="name"><span class="home-lbl">⌂ 홈</span><small>IPTK MES</small></div>
+      <div class="name"><span class="home-lbl">⌂ 홈</span><small>MOLD</small></div>
     </div>
 
     <ul class="top-menu" id="topMenu"></ul>
@@ -183,7 +183,7 @@ a.menu-off,a.menu-off:hover{color:#9aa5ae!important;opacity:.55;cursor:not-allow
           <span class="txt"><b id="uName">-</b><span id="uRole">-</span></span>
         </button>
         <div class="dd-menu">
-          <div class="hd" id="uHd">IPTK MES</div>
+          <div class="hd" id="uHd">MOLD</div>
         </div>
       </div>
       <div class="user"></div>
@@ -206,7 +206,7 @@ a.menu-off,a.menu-off:hover{color:#9aa5ae!important;opacity:.55;cursor:not-allow
       <button data-act="right">오른쪽 탭 닫기</button>
       <button data-act="close">닫기</button>
     </div>
-    <div class="crumb" id="crumb"><span>IPTK MES</span></div>
+    <div class="crumb" id="crumb"><span>MOLD</span></div>
     <div class="stage" id="stage"><div class="vwait" id="vwait">화면을 여는 중…</div></div>
     <div class="status">
       <span><span class="dot"></span><span id="statusMsg">준비</span></span>
@@ -579,8 +579,8 @@ function openPage(p){if(!openTabs.has(p.id))openTabs.set(p.id,p);if(activeId!==p
 function activate(id){if(activeId!==id)prevId=activeId;activeId=id;const p=openTabs.get(id);if(p&&p.mod)activeModule=p.mod;buildTop();renderTabs();renderStage();renderCrumb();saveTabs()}
 function renderCrumb(){
   const p=openTabs.get(activeId);const c=$('#crumb');
-  if(!p){c.innerHTML='<span>IPTK MES</span>';return}
-  c.innerHTML=`<span>IPTK MES</span>${p.mod?`<span>›</span><span>${esc(p.mod)}</span><span>›</span><span>${esc(p.sec)}</span>`:''}<span>›</span><b>${esc(p.title)}</b><span class="right"><span>${p.file?esc(p.file):''}</span></span>`;
+  if(!p){c.innerHTML='<span>MOLD</span>';return}
+  c.innerHTML=`<span>MOLD</span>${p.mod?`<span>›</span><span>${esc(p.mod)}</span><span>›</span><span>${esc(p.sec)}</span>`:''}<span>›</span><b>${esc(p.title)}</b><span class="right"><span>${p.file?esc(p.file):''}</span></span>`;
 }
 
 /* ---------- 탭 ---------- */
@@ -716,7 +716,7 @@ window.IPMES={APP,pageRegistry,get active(){return openTabs.get(activeId)||null}
 /* ---------- 사용자 (mes_auth.js 연동) ---------- */
 function syncUser(){
   const a=window.MES_AUTH;const name=a?.name||'게스트';const role=a?.role==='master'?'마스터':a?.role==='admin'?'관리자':'사용자';
-  $('#uName').textContent=name;$('#uRole').textContent=role;$('#uAv').textContent=String(name)[0].toUpperCase();$('#uHd').textContent=a?.session?.user?.email||'IPTK MES';
+  $('#uName').textContent=name;$('#uRole').textContent=role;$('#uAv').textContent=String(name)[0].toUpperCase();$('#uHd').textContent=a?.session?.user?.email||'MOLD';
 }
 
 /* ---------- 선반입 ---------- */
