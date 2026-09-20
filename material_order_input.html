@@ -278,7 +278,7 @@ const today=new Date().toISOString().slice(0,10);
 preview.classList.add('on');
 const n=a4Build(docArea,{title:'원재료 발주서',cols:9,
  head:`<h2>원재료 발주서</h2>
-<table class="info"><tr><td>발　신 : (주)일평기연</td></tr><tr><td>작성자 : ${OWNER}</td></tr><tr><td>수　신 : ${v}</td></tr><tr><td>F A X : 031-295-9047</td></tr></table>
+<table class="info"><tr><td>발　신 : (주)태진다이텍</td></tr><tr><td>작성자 : ${OWNER}</td></tr><tr><td>수　신 : ${v}</td></tr></table>
 <table class="info"><tr><th>제 번</th><td>${rows[0].job}_${rows[0].proc}</td><th>품 명</th><td>${j.item||''}</td><th>발주일</th><td>${today}</td></tr></table>`,
  contHead:`<table class="info"><tr><th>제 번</th><td>${rows[0].job}_${rows[0].proc}</td><th>수 신</th><td>${v}</td><th>발주일</th><td>${today}</td></tr></table>`,
  colgroup:'<colgroup><col style="width:6%"><col style="width:10%"><col style="width:18%"><col style="width:10%"><col style="width:9%"><col style="width:14%"><col style="width:14%"><col style="width:12%"><col style="width:7%"></colgroup>',
