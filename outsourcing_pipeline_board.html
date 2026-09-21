@@ -25,6 +25,12 @@ button,input,select{font:inherit;color:inherit}button{cursor:pointer}
 .cbo{height:33px;width:150px;border:1px solid var(--line);border-radius:8px;background:#fff;padding:0 8px;outline:0;font:inherit;color:inherit}
 .cbo:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(47,117,181,.14)}
 @media(max-width:820px){.cbo{width:120px}}
+/* v141: mes_ctx 콤보 래퍼(.mescb)가 인라인 폭이 없으면 100% 로 늘어나 한 줄을 다 차지하던 문제 — 폭 고정 + 툴바 높이에 맞춤 */
+.top .mescb{width:170px!important;flex:0 0 auto}
+.top .mescb-in{height:33px;border-radius:8px;border-color:var(--line);padding-left:10px}
+.top .mescb-in:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(47,117,181,.14)}
+.top .mescb-ar{height:31px;line-height:31px;right:4px}
+@media(max-width:820px){.top .mescb{width:130px!important}}
 .srch{position:relative;flex:1;min-width:140px;max-width:300px}
 .srch input{width:100%;height:33px;border:1px solid var(--line);border-radius:8px;background:#fff;padding:0 10px 0 30px;outline:0}
 .srch input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(47,117,181,.14)}
@@ -142,8 +148,8 @@ button,input,select{font:inherit;color:inherit}button{cursor:pointer}
   <button data-v="pipe" class="on" onclick="setView('pipe')">부품별 공정</button>
   <button data-v="vendor" onclick="setView('vendor')">업체 보드</button>
  </div>
- <input id="fJob" class="cbo" list="jobDL" autocomplete="off" placeholder="제번 입력/선택" oninput="apply()" onchange="jobPick()"><datalist id="jobDL"></datalist>
- <input id="fPn" class="cbo" list="pnDL" autocomplete="off" placeholder="품번 입력/선택" oninput="apply()" onchange="pnPick()"><datalist id="pnDL"></datalist>
+ <input id="fJob" class="cbo" style="width:170px" list="jobDL" autocomplete="off" placeholder="제번 입력/선택" oninput="apply()" onchange="jobPick()"><datalist id="jobDL"></datalist>
+ <input id="fPn" class="cbo" style="width:170px" list="pnDL" autocomplete="off" placeholder="품번 입력/선택" oninput="apply()" onchange="pnPick()"><datalist id="pnDL"></datalist>
  <div class="srch"><input id="q" placeholder="부품코드 · 업체 · 공정 검색" oninput="apply()"></div>
  <button class="tbtn red" id="bLate" onclick="toggleLate()">⚠ 지연만</button>
  <button class="tbtn" id="bPlan" onclick="togglePlan()" title="가공계획에는 있으나 아직 발주하지 않은 공정이 남은 부품만 봅니다">⬚ 미발주만</button>
