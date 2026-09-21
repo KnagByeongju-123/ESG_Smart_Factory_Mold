@@ -59,14 +59,14 @@ input.cell,tr.sel input.cell,tr:hover input.cell{color:#22303a;background:#fff;-
 <div class="screen">
   <div class="title"><h1>구매품 발주</h1></div>
   <section class="filters">
-    <span class="label">제번</span><input id="jobQ" class="field" style="width:220px" placeholder="제번">
-    <span class="label">품명</span><input id="itemQ" class="field" style="width:280px" placeholder="품명">
+    <span class="label">제번</span><input id="jobQ" class="field" style="width:220px" placeholder="제번 입력/선택" autocomplete="off">
+    <span class="label">모델</span><input id="modelQ" class="field" style="width:280px" placeholder="모델 입력/선택" list="modelDL" autocomplete="off"><datalist id="modelDL"></datalist>
     <button class="btn" onclick="search()">⌕ 조회</button>
   </section>
   <section class="panes">
     <div class="box"><div class="box-title">제번리스트</div><div class="tablewrap"><table>
       <colgroup><col style="width:36%"><col style="width:36%"><col style="width:14%"><col style="width:14%"></colgroup>
-      <thead><tr><th>제번</th><th>품명</th><th>공정</th><th>공정명</th></tr></thead><tbody id="jobBody"></tbody></table></div></div>
+      <thead><tr><th>제번</th><th>모델</th><th>공정</th><th>공정명</th></tr></thead><tbody id="jobBody"></tbody></table></div></div>
     <div class="box"><div class="box-title">자재표 리스트</div><div class="tablewrap"><table>
       <colgroup><col style="width:38px"><col style="width:13%"><col style="width:19%"><col style="width:11%"><col style="width:20%"><col style="width:9%"><col style="width:10%"><col style="width:11%"></colgroup>
       <thead><tr><th><input type="checkbox" id="bomAll" onclick="bomAllToggle(this)" title="전체선택 / 전체해제"></th><th>품번</th><th>부품명</th><th>재질</th><th>규격</th><th>수량</th><th title="이 제번에서 이미 발주된 수량(원재료/구매품 발주 합계)">발주수량</th><th>첨부</th></tr></thead><tbody id="bomBody"></tbody></table></div></div>
@@ -93,7 +93,7 @@ let VENDORS=[];  /* 협력업체는 마스터에서 로드 (mes_lookup.js) */
 const REQ=[];
 let jobIdx=0,venIdx=-1,jobView=[...JOBS],venView=[...VENDORS];
 const money=v=>Number(v||0).toLocaleString('ko-KR');
-function renderJobs(){jobBody.innerHTML=jobView.map((j,i)=>`<tr class="${i===jobIdx?'sel':''}" onclick="pickJob(${i})"><td>${j.job}</td><td>${j.item}</td><td class="c">${j.proc}</td><td class="c">${j.procName}</td></tr>`).join('');countText.textContent=`제번 ${jobView.length}건 / 요청 ${REQ.length}건`}
+function renderJobs(){jobBody.innerHTML=jobView.map((j,i)=>`<tr class="${i===jobIdx?'sel':''}" onclick="pickJob(${i})"><td>${j.job}</td><td>${j.model||''}</td><td class="c">${j.proc}</td><td class="c">${j.procName}</td></tr>`).join('');countText.textContent=`제번 ${jobView.length}건 / 요청 ${REQ.length}건`}
 /* v80: 협력업체는 체크박스로 고른다. 여러 업체에 나눠 발주할 수 있고, 어디로 나가는지 눈으로 확인된다 */
 /* v115: 협력업체는 외주가공 발주와 동일하게 — 체크박스 없이 행을 클릭해 하나를 고른다 */
 function pickedVendors(){const v=venView[venIdx];return v?[v]:[]}
@@ -151,7 +151,11 @@ function pickJob(i){jobIdx=i;renderJobs();renderBom();if(typeof loadBom==='funct
 function pickVendor(i){const v=venView[i];if(v==null)return;
  venIdx=(venIdx===i)?-1:i;renderVendors();
  msg(venIdx<0?'협력업체 선택 없음':`협력업체 ${v} 선택`)}
-function search(){const j=jobQ.value.trim().toLowerCase(),it=itemQ.value.trim().toLowerCase();jobView=JOBS.filter(x=>(!j||x.job.toLowerCase().includes(j))&&(!it||(x.item||'').toLowerCase().includes(it)));jobIdx=0;renderJobs();renderBom();renderReq();msg(`제번 ${jobView.length}건을 조회했습니다.`+(REQ.length?` · 구매요청 리스트에 ${REQ.length}건이 남아 있습니다.`:''))}
+/* v117: 모델 드롭다운 — 타이핑·선택 병행 (datalist) */
+function fillModelDL(){const dl=document.getElementById('modelDL');if(!dl)return;
+ const ms=[...new Set(JOBS.map(x=>(x.model||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+ dl.innerHTML=ms.map(m=>`<option value="${String(m).replace(/"/g,'')}">`).join('')}
+function search(){const j=jobQ.value.trim().toLowerCase(),md=modelQ.value.trim().toLowerCase();jobView=JOBS.filter(x=>(!j||x.job.toLowerCase().includes(j))&&(!md||(x.model||'').toLowerCase().includes(md)));jobIdx=0;renderJobs();renderBom();renderReq();msg(`제번 ${jobView.length}건을 조회했습니다.`+(REQ.length?` · 구매요청 리스트에 ${REQ.length}건이 남아 있습니다.`:''))}
 async function pushDown(){const j=jobView[jobIdx];if(!j)return;const picks=[...bomBody.querySelectorAll('input:checked')].map(x=>j.bom[Number(x.dataset.i)]);if(!picks.length)return msg('자재표에서 발주할 품번을 선택하세요.');const vens=pickedVendors();
  if(!vens.length)return msg('협력업체리스트에서 발주할 업체를 선택하세요.');
  const d=reqDate.value||new Date().toISOString().slice(0,10);
@@ -281,7 +285,8 @@ async function loadJobs(){
  try{
   const rs=await MESDB.table('job_pool').select('select=*&order=row_no');
   const seen=new Set(JOBS.map(j=>j.job));
-  rs.forEach(r=>{if(!seen.has(r.job_no))JOBS.push({job:r.job_no,item:r.item_name||'',proc:'1',procName:'1/'+Math.max(1,Math.trunc(Number(r.set_qty))||1),setQty:Math.max(1,Math.trunc(Number(r.set_qty))||1),bom:[]})});
+  rs.forEach(r=>{if(!seen.has(r.job_no))JOBS.push({job:r.job_no,item:r.item_name||'',model:r.model||'',proc:'1',procName:'1/'+Math.max(1,Math.trunc(Number(r.set_qty))||1),setQty:Math.max(1,Math.trunc(Number(r.set_qty))||1),bom:[]})});
+  fillModelDL();
   if(typeof search==='function')search();else{jobView=[...JOBS];renderJobs()}
   await loadBom();
  }catch(e){}
@@ -405,6 +410,10 @@ async function reAdd(){const j=jobView[jobIdx];if(!j)return;
   if(c&&!c.querySelector('.rb')){const e=document.createElement('span');e.className='rb';e.textContent='재';e.title='재발주 — '+(r.remark||'');c.prepend(e)}})};
  const st=document.createElement('style');st.textContent='.rb{display:inline-block;margin-right:4px;padding:0 4px;border-radius:3px;background:#a04000;color:#fff;font-size:10px;font-weight:700;line-height:15px}#reqBody tr.reord td{background:#fff6ec}#bomBody .rq{color:#a04000;font-weight:700;font-size:11px}#reBody td{height:26px;border-bottom:1px solid #dde3e8;padding:0 6px}';
  document.head.appendChild(st)})();
+</script>
+<script src="mes_jobpick.js?v=117"></script>
+<script>/* v117: 제번 칸 — 등록된 제번 목록에서 고르거나 직접 타이핑 (둘 다 가능) */
+try{MESJOB.attach("jobQ",{onPick:()=>{try{search()}catch(e){}}})}catch(e){}
 </script>
 </body>
 </html>
