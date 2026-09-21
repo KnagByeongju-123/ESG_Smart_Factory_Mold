@@ -25,19 +25,19 @@ table{border-collapse:collapse;min-width:1040px;width:100%;table-layout:fixed}th
 </style></head><body><div class="screen">
 <div class="title"><h1>제조원가 조회</h1><small>1공장 · 기준 2026-08-22</small></div>
 <section class="form">
- <div class="formrow"><div class="label">수주유형</div><select id="otype" class="field"><option selected>전체</option><option>신작</option><option>개조</option><option>수리</option><option>유상사급</option></select><div class="label">제번</div><input id="jobq" class="field"><div class="label">모델</div><input id="modelq" class="field"><div class="label">품명</div><input id="itemq" class="field"></div>
+ <div class="formrow"><div class="label">수주유형</div><select id="otype" class="field"><option selected>전체</option><option>신작</option><option>개조</option><option>수리</option><option>유상사급</option></select><div class="label">제번</div><input id="jobq" class="field"><div class="label">품번</div><input id="modelq" class="field"><div class="label">품명</div><input id="itemq" class="field"></div>
  <div class="formrow"><div class="label">수주일</div><input type="date" class="field"><div class="label">T/O 완료일</div><input type="date" class="field"><div class="label">완료일</div><input type="date" class="field"><div class="label">도번</div><input id="drawq" class="field"></div>
 </section>
 <div class="split">
  <div class="gridbox"><table style="min-width:1320px">
-  <thead><tr><th style="width:70px">수주유형</th><th style="width:92px" title="정산까지 끝나 제번을 종결한 날">정산완료일</th><th style="width:78px">제번</th><th style="width:90px">모델</th><th style="width:180px">품명</th><th style="width:110px">도번</th><th style="width:52px">조수</th><th style="width:72px">개발유형</th><th style="width:112px">수주가</th><th style="width:112px">목표가</th><th style="width:78px">목표가대비</th><th style="width:106px">SET외주</th><th style="width:100px">경비</th><th style="width:112px">제조원가</th><th style="width:112px">이윤</th><th style="width:68px">이익률</th></tr></thead>
+  <thead><tr><th style="width:70px">수주유형</th><th style="width:92px" title="정산까지 끝나 제번을 종결한 날">정산완료일</th><th style="width:78px">제번</th><th style="width:90px">품번</th><th style="width:180px">품명</th><th style="width:110px">도번</th><th style="width:52px">조수</th><th style="width:72px">개발유형</th><th style="width:112px">수주가</th><th style="width:112px">목표가</th><th style="width:78px">목표가대비</th><th style="width:106px">SET외주</th><th style="width:100px">경비</th><th style="width:112px">제조원가</th><th style="width:112px">이윤</th><th style="width:68px">이익률</th></tr></thead>
   <tbody id="obody"></tbody>
   <tfoot><tr class="gtot"><td colspan="16" class="c" id="totline">조회 0건</td></tr></tfoot>
  </table></div>
  <div class="gridbox"><table style="min-width:1560px">
   <thead>
    <tr class="grp"><th colspan="7">기본정보</th><th colspan="6">설계비</th><th colspan="6">재료비</th></tr>
-   <tr><th style="width:78px">제번</th><th style="width:90px">모델</th><th style="width:150px">품명</th><th style="width:120px">도번</th><th style="width:52px">공정</th><th style="width:110px">제조원가</th><th style="width:78px">제조원가율</th><th style="width:100px">소계</th><th style="width:56px">(%)</th><th style="width:100px">사내</th><th style="width:56px">(%)</th><th style="width:90px">사외</th><th style="width:56px">(%)</th><th style="width:100px">소계</th><th style="width:56px">(%)</th><th style="width:100px">원재료</th><th style="width:56px">(%)</th><th style="width:100px">구매품</th><th style="width:56px">(%)</th></tr>
+   <tr><th style="width:78px">제번</th><th style="width:90px">품번</th><th style="width:150px">품명</th><th style="width:120px">도번</th><th style="width:52px">공정</th><th style="width:110px">제조원가</th><th style="width:78px">제조원가율</th><th style="width:100px">소계</th><th style="width:56px">(%)</th><th style="width:100px">사내</th><th style="width:56px">(%)</th><th style="width:90px">사외</th><th style="width:56px">(%)</th><th style="width:100px">소계</th><th style="width:56px">(%)</th><th style="width:100px">원재료</th><th style="width:56px">(%)</th><th style="width:100px">구매품</th><th style="width:56px">(%)</th></tr>
   </thead>
   <tbody id="dbody"></tbody>
   <tfoot id="dfoot"></tfoot>
@@ -109,7 +109,7 @@ function search(){
  dbody.innerHTML='';dfoot.innerHTML='';render();renderTotal();message.textContent=`조회결과 ${view.length}건입니다.`;
 }
 function exportCsv(){
- const h=['수주유형','정산완료일','제번','모델','품명','도번','조수','개발유형','수주가','목표가','목표가대비','SET외주','경비','제조원가','이윤','이익률'];
+ const h=['수주유형','정산완료일','제번','품번','품명','도번','조수','개발유형','수주가','목표가','목표가대비','SET외주','경비','제조원가','이윤','이익률'];
  const rows=view.map(r=>[r.order_type,r.completion_date,r.job_no,r.model,r.item_name,r.drawing_no,r.set_qty,r.development_type,r.order_price,r.target_price,r.target_ratio_pct,r.set_outsourcing_cost,r.expense_cost,r.manufacturing_cost,r.profit,r.profit_rate_pct]);
  const csv='\ufeff'+[h,...rows].map(a=>a.map(v=>'"'+String(v??'').replaceAll('"','""')+'"').join(',')).join('\n');
  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download='manufacturing_cost_orders.csv';a.click();

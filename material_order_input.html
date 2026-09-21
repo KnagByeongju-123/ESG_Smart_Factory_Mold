@@ -60,13 +60,13 @@ input.cell,tr.sel input.cell,tr:hover input.cell{color:#22303a;background:#fff;-
   <div class="title"><h1>원재료 발주</h1></div>
   <section class="filters">
     <span class="label">제번</span><input id="jobQ" class="field" style="width:220px" placeholder="제번 입력/선택" autocomplete="off">
-    <span class="label">모델</span><input id="modelQ" class="field" style="width:260px" placeholder="모델 입력/선택" list="modelDL" autocomplete="off"><datalist id="modelDL"></datalist>
+    <span class="label">품번</span><input id="modelQ" class="field" style="width:260px" placeholder="품번 입력/선택" list="modelDL" autocomplete="off"><datalist id="modelDL"></datalist>
     <button class="btn" onclick="search()">⌕ 조회</button>
   </section>
   <section class="panes">
     <div class="box"><div class="box-title">제번리스트</div><div class="tablewrap"><table>
       <colgroup><col style="width:36%"><col style="width:34%"><col style="width:15%"><col style="width:15%"></colgroup>
-      <thead><tr><th>제번</th><th>모델</th><th>공정코드</th><th>공정명</th></tr></thead><tbody id="jobBody"></tbody></table></div></div>
+      <thead><tr><th>제번</th><th>품번</th><th>공정코드</th><th>공정명</th></tr></thead><tbody id="jobBody"></tbody></table></div></div>
     <div class="box"><div class="box-title">자재표 리스트</div><div class="tablewrap"><table>
       <colgroup><col style="width:38px"><col style="width:14%"><col style="width:17%"><col style="width:12%"><col style="width:21%"><col style="width:9%"><col style="width:10%"><col style="width:10%"></colgroup>
       <thead><tr><th><input type="checkbox" id="bomAll" onclick="bomAllToggle(this)" title="전체선택 / 전체해제"></th><th>품번</th><th>부품명</th><th>재질</th><th>규격</th><th>수량</th><th title="이 제번에서 이미 발주된 수량(원재료/구매품 발주 합계)">발주수량</th><th>첨부</th></tr></thead><tbody id="bomBody"></tbody></table></div></div>
@@ -197,7 +197,7 @@ function onModelPick(){
 function applyFilter(){const j=jobQ.value.trim().toLowerCase(),md=modelQ.value.trim().toLowerCase();
  jobView=JOBS.filter(x=>(!j||x.job.toLowerCase().includes(j))&&(!md||(x.model||'').toLowerCase().includes(md)));
  jobIdx=0;renderJobs();renderBom();renderReq();
- if(!jobView.length)msg(JOBS.length?'조건에 맞는 제번이 없습니다. 제번·모델 칸을 비우고 다시 조회해 보세요.'
+ if(!jobView.length)msg(JOBS.length?'조건에 맞는 제번이 없습니다. 제번·품번 칸을 비우고 다시 조회해 보세요.'
    :'제번 목록을 불러오지 못했습니다. 잠시 후 [⌕ 조회]를 다시 누르세요.');
  else msg(`제번 ${jobView.length}건을 조회했습니다.`+(REQ.length?` · 구매요청 리스트에 ${REQ.length}건이 남아 있습니다.`:''));
  return jobView.length}
