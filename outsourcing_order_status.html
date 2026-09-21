@@ -37,15 +37,15 @@ tfoot th{position:sticky;bottom:0;background:linear-gradient(#e6eef5,#d3e0ea)}
       <span class="label">입고확정일</span><input id="cd1" class="field" type="date"><span>~</span><input id="cd2" class="field" type="date">
     </div>
     <div class="frow">
-      <span class="label">제 번</span><input id="jobQ" class="field" style="width:180px">
-      <span class="label">품 명</span><input id="itemQ" class="field" style="width:180px">
+      <span class="label">제 번</span><input id="jobQ" class="field" style="width:180px" placeholder="제번 입력/선택" autocomplete="off">
+      <span class="label">품 번</span><input id="pnQ" class="field" style="width:180px" placeholder="품번 입력/선택" list="pnDL" autocomplete="off"><datalist id="pnDL"></datalist>
       <span class="label">협력업체</span><select id="vendorQ" class="field" data-combo style="width:180px"><option value="">전체</option></select>
       <button class="btn" onclick="search()">⌕ 조회</button>
     </div>
   </section>
   <div class="gridbox"><div class="tablewrap"><table>
     <colgroup><col style="width:44px"><col style="width:76px"><col style="width:110px"><col style="width:120px"><col style="width:180px"><col style="width:48px"><col style="width:58px"><col style="width:70px"><col style="width:140px"><col style="width:52px"><col style="width:52px"><col style="width:84px"><col style="width:92px"><col style="width:96px"><col style="width:92px"><col style="width:96px"><col style="width:100px"><col style="width:100px"><col style="width:62px"></colgroup>
-    <thead><tr><th>No</th><th>구분</th><th>협력업체</th><th>제번</th><th>품명</th><th>공정</th><th>공정명</th><th>품번</th><th>부품명</th><th title="발주수량">발주<br>수량</th><th title="입고수량">입고<br>수량</th><th>가공공정</th><th>발주일</th><th>입고예정일</th><th>입고일</th><th>입고확정일</th><th>견적가</th><th>확정가</th><th>수정</th></tr></thead>
+    <thead><tr><th>No</th><th>구분</th><th>협력업체</th><th>제번</th><th title="수주등록의 품번(제품)">품번(제품)</th><th>공정</th><th>공정명</th><th>품번</th><th>부품명</th><th title="발주수량">발주<br>수량</th><th title="입고수량">입고<br>수량</th><th>가공공정</th><th>발주일</th><th>입고예정일</th><th>입고일</th><th>입고확정일</th><th>견적가</th><th>확정가</th><th>수정</th></tr></thead>
     <tbody id="body"></tbody>
     <tfoot><tr><th colspan="16" class="r">합 계</th><th class="r" id="sumQuote">0</th><th class="r" id="sumFix">0</th><th></th></tr></tfoot>
   </table></div></div>
@@ -56,7 +56,7 @@ const rows=[];
 let view=[...rows];
 const money=v=>Number(v||0).toLocaleString('ko-KR');
 function within(v,a,b){if(!a&&!b)return true;if(!v)return false;return (!a||v>=a)&&(!b||v<=b)}
-function render(){body.innerHTML=view.map((r,i)=>`<tr onclick="sel(this)" ondblclick="openEdit(${i})" title="더블클릭하면 이 행을 수정할 수 있습니다"><td class="c">${i+1}</td><td class="c"><span class="tag t-${r.st}">${r.st}</span></td><td>${r.vendor}</td><td>${r.job}</td><td>${r.item}</td><td class="c">${r.proc}</td><td class="c">${r.procName}</td><td>${r.part}</td><td>${r.partName}</td><td class="r">${Number(r.ord)||1}</td><td class="r">${Number(r.got)||0}</td><td class="c">${r.mp}</td><td class="c">${r.odate}</td><td class="c">${r.edate}</td><td class="c">${r.idate}</td><td class="c">${r.cdate}</td><td class="r">${money(r.quote)}</td><td class="r">${money(r.fix)}</td><td class="c"><button class="btn edit" onclick="event.stopPropagation();openEdit(${i})" title="이 행을 수정합니다">✎ 수정</button></td></tr>`).join('');
+function render(){body.innerHTML=view.map((r,i)=>`<tr onclick="sel(this)" ondblclick="openEdit(${i})" title="더블클릭하면 이 행을 수정할 수 있습니다"><td class="c">${i+1}</td><td class="c"><span class="tag t-${r.st}">${r.st}</span></td><td>${r.vendor}</td><td>${r.job}</td><td>${PN(r.job)}</td><td class="c">${r.proc}</td><td class="c">${r.procName}</td><td>${r.part}</td><td>${r.partName}</td><td class="r">${Number(r.ord)||1}</td><td class="r">${Number(r.got)||0}</td><td class="c">${r.mp}</td><td class="c">${r.odate}</td><td class="c">${r.edate}</td><td class="c">${r.idate}</td><td class="c">${r.cdate}</td><td class="r">${money(r.quote)}</td><td class="r">${money(r.fix)}</td><td class="c"><button class="btn edit" onclick="event.stopPropagation();openEdit(${i})" title="이 행을 수정합니다">✎ 수정</button></td></tr>`).join('');
 sumQuote.textContent=money(view.reduce((a,r)=>a+(Number(r.quote)||0),0));sumFix.textContent=money(view.reduce((a,r)=>a+(Number(r.fix)||0),0));countText.textContent=`${view.length}건`}
 function sel(tr){document.querySelectorAll('#body tr').forEach(x=>x.classList.remove('sel'));tr.classList.add('sel')}
 /* v88: [조회] 는 DB 를 다시 읽고 나서 거른다 — 다른 화면에서 새로 생긴 발주가 바로 보인다 */
@@ -68,10 +68,40 @@ function search(){
  }
  _filterNow();
 }
-function _filterNow(){const st=document.querySelector('input[name=st]:checked').value;const j=jobQ.value.trim().toLowerCase(),it=itemQ.value.trim().toLowerCase(),v=vendorQ.value.trim().toLowerCase();
-view=rows.filter(r=>(st==='전체'||r.st===st)&&(!j||r.job.toLowerCase().includes(j))&&(!it||r.item.toLowerCase().includes(it))&&(!v||r.vendor.toLowerCase().includes(v))&&within(r.edate,ed1.value,ed2.value)&&within(r.idate,id1.value,id2.value)&&within(r.cdate,cd1.value,cd2.value));
+/* ── v122: 수주등록의 품번(job_pool.model)으로 찾기 — 제번·품번 드롭다운(타이핑 병행) ── */
+const PNMAP=new Map();                 /* 제번 → 품번(제품) */
+const PN=j=>PNMAP.get(j)||'';
+function pnFillDL(){
+ const dl=document.getElementById('pnDL');if(!dl)return;
+ const jobs=[...new Set(rows.map(r=>r.job))];
+ const seen=new Set(),out=[];
+ jobs.forEach(j=>{const m=PN(j);if(!m||seen.has(m))return;seen.add(m);out.push({m,job:j})});
+ out.sort((a,b)=>a.m.localeCompare(b.m));
+ dl.innerHTML=out.map(o=>`<option value="${String(o.m).replace(/"/g,'')}">${String(o.job).replace(/</g,'')}</option>`).join('');
+}
+async function pnLoad(){
+ try{
+  for(let i=0;i<60&&!window.MESDB;i++)await new Promise(r=>setTimeout(r,50));
+  if(window.MESDB&&MESDB.ready){try{await MESDB.ready}catch(e){}}
+  for(let i=0;i<20&&!(window.MESDB&&MESDB.online);i++)await new Promise(r=>setTimeout(r,150));
+  if(!(window.MESDB&&MESDB.online))return;
+  const rs=await MESDB.table('job_pool').select('select=job_no,model');
+  PNMAP.clear();(rs||[]).forEach(r=>{const m=String(r.model||'').trim();if(m)PNMAP.set(r.job_no,m)});
+  pnFillDL();render();
+ }catch(e){}
+}
+/* 품번을 고르면 제번 칸을 채우고, 제번을 고르면 품번 칸을 채운다 */
+function pnPick(){
+ const v=String(pnQ.value||'').trim();
+ if(v){const jobs=[...PNMAP.entries()].filter(([,m])=>m.toLowerCase()===v.toLowerCase()).map(([j])=>j);
+  if(jobs.length===1)jobQ.value=jobs[0];else if(jobs.length>1)jobQ.value='';}
+ _filterNow();
+}
+function jobPick(){const m=PN(String(jobQ.value||'').trim());if(m)pnQ.value=m;_filterNow()}
+function _filterNow(){const st=document.querySelector('input[name=st]:checked').value;const j=jobQ.value.trim().toLowerCase(),pn=pnQ.value.trim().toLowerCase(),v=vendorQ.value.trim().toLowerCase();
+view=rows.filter(r=>(st==='전체'||r.st===st)&&(!j||r.job.toLowerCase().includes(j))&&(!pn||PN(r.job).toLowerCase().includes(pn))&&(!v||r.vendor.toLowerCase().includes(v))&&within(r.edate,ed1.value,ed2.value)&&within(r.idate,id1.value,id2.value)&&within(r.cdate,cd1.value,cd2.value));
 render();msg(`${st} 기준 ${view.length}건을 조회했습니다.`)}
-function exportCsv(){const out=[['구분','협력업체','제번','품명','공정','공정명','품번','부품명','발주수량','입고수량','가공공정','발주일','입고예정일','입고일','입고확정일','견적가','확정가'],...view.map(r=>[r.st,r.vendor,r.job,r.item,r.proc,r.procName,r.part,r.partName,(Number(r.ord)||1),(Number(r.got)||0),r.mp,r.odate,r.edate,r.idate,r.cdate,r.quote,r.fix])];const csv='\ufeff'+out.map(a=>a.map(v=>'"'+String(v??'').replaceAll('"','""')+'"').join(',')).join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download='outsourcing_order_status.csv';a.click();URL.revokeObjectURL(a.href);msg('EXCEL(CSV) 파일을 생성했습니다.')}
+function exportCsv(){const out=[['구분','협력업체','제번','품번(제품)','공정','공정명','품번','부품명','발주수량','입고수량','가공공정','발주일','입고예정일','입고일','입고확정일','견적가','확정가'],...view.map(r=>[r.st,r.vendor,r.job,PN(r.job),r.proc,r.procName,r.part,r.partName,(Number(r.ord)||1),(Number(r.got)||0),r.mp,r.odate,r.edate,r.idate,r.cdate,r.quote,r.fix])];const csv='\ufeff'+out.map(a=>a.map(v=>'"'+String(v??'').replaceAll('"','""')+'"').join(',')).join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download='outsourcing_order_status.csv';a.click();URL.revokeObjectURL(a.href);msg('EXCEL(CSV) 파일을 생성했습니다.')}
 function msg(t){message.textContent=t}
 /* ════ v112: 행 더블클릭 수정 ════
  *  협력업체·발주일·입고예정일·입고일·입고확정일·견적가·확정가를 그 자리에서 고친다.
@@ -215,5 +245,13 @@ async function loadVendorSel(){
 loadVendorSel();setTimeout(loadVendorSel,1500);
 </script>
 <script src="mes_ctx.js?v=92"></script>
+<script src="mes_jobpick.js?v=122"></script>
+<script>/* v122: 제번·품번 — 목록에서 고르거나 직접 입력 */
+try{MESJOB.attach("jobQ",{onPick:()=>{try{jobPick()}catch(e){}}})}catch(e){}
+try{jobQ.addEventListener("change",()=>{try{jobPick()}catch(e){}});
+ pnQ.addEventListener("change",()=>{try{pnPick()}catch(e){}});
+ [jobQ,pnQ].forEach(el=>el.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();el.blur()}}));
+ pnLoad();}catch(e){}
+</script>
 </body>
 </html>
