@@ -43,9 +43,12 @@ input,select{font:inherit}
 .top-menu>li:hover>button{color:#fff;border-bottom-color:var(--amber)}
 .top-menu>li.on>button{color:#fff;border-bottom-color:var(--amber)}
 .top-menu>li.pin>button{color:#fff;border-bottom-color:var(--amber);background:var(--steel-2)}
-.top-menu>li.pin .mega{display:flex}
-.mega{position:absolute;top:100%;left:0;display:none;background:var(--white);color:var(--ink);border:1px solid var(--line);border-radius:0 0 var(--r) var(--r);box-shadow:var(--shadow);padding:14px 4px;z-index:60;flex-wrap:wrap;width:max-content;max-width:calc(100vw - 24px);max-height:calc(100vh - var(--top-h) - 12px);overflow-y:auto;overscroll-behavior:contain}
-.top-menu>li:hover .mega{display:flex}
+/* v130: 상단 메가메뉴 — 마우스가 들어오면 부드럽게 나타나고, 벗어나면 살짝 늦게 닫힌다
+   (display 전환은 애니메이션이 안 되므로 opacity·transform 으로 처리) */
+.mega{position:absolute;top:100%;left:0;display:flex;visibility:hidden;opacity:0;transform:translateY(-6px);pointer-events:none;transition:opacity .16s ease .12s,transform .16s ease .12s,visibility 0s linear .28s;background:var(--white);color:var(--ink);border:1px solid var(--line);border-radius:0 0 var(--r) var(--r);box-shadow:var(--shadow);padding:14px 4px;z-index:60;flex-wrap:wrap;width:max-content;max-width:calc(100vw - 24px);max-height:calc(100vh - var(--top-h) - 12px);overflow-y:auto;overscroll-behavior:contain}
+.top-menu>li:hover .mega,.top-menu>li.pin .mega{visibility:visible;opacity:1;transform:translateY(0);pointer-events:auto;
+ transition:opacity .16s ease,transform .16s ease,visibility 0s}
+@media(prefers-reduced-motion:reduce){.mega,.top-menu>li:hover .mega,.top-menu>li.pin .mega{transition:none}}
 .mega .col{padding:0 16px 8px;border-right:1px solid var(--line);min-width:150px;align-self:start}
 .mega .col:last-child{border-right:0}
 .mega h4{font-size:14px;color:var(--ink-3);font-weight:600;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--line);white-space:nowrap}
@@ -216,7 +219,7 @@ a.menu-off,a.menu-off:hover{color:#9aa5ae!important;opacity:.55;cursor:not-allow
 </div>
 
 <script>
-const APP_VER='129';
+const APP_VER='130';
 const APP={
   '영업관리':{
     secondary:[
@@ -525,11 +528,11 @@ function buildTop(){
 
 /* 메가메뉴가 화면 오른쪽을 넘지 않게 위치 보정 */
 function placeMega(li,mega){
-  if(!mega)return;mega.style.left='0px';mega.style.display='flex';
+  /* v130: 메가메뉴는 항상 렌더(숨김은 opacity)되므로 display 를 건드리지 않고 그대로 잰다 */
+  if(!mega)return;mega.style.left='0px';
   const r=mega.getBoundingClientRect(),vw=window.innerWidth-12;
   if(r.right>vw)mega.style.left=(vw-r.right)+'px';
   const lr=li.getBoundingClientRect();if(lr.left+parseFloat(mega.style.left)<12)mega.style.left=(12-lr.left)+'px';
-  mega.style.display='';
 }
 /* ---------- 메뉴 링크 ---------- */
 function buildSide(){}
