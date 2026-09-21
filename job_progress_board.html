@@ -82,8 +82,8 @@ button,input,select{font:inherit;color:inherit}
  <div class="title"><h1>수주진척현황</h1><small>영업관리 · 수주</small></div>
 
  <div class="filt">
-  <span class="lb" style="margin-left:0">제 번</span><input id="qJob" class="field" style="width:130px" oninput="apply()">
-  <span class="lb">품 명</span><input id="qItem" class="field" style="width:150px" oninput="apply()">
+  <span class="lb" style="margin-left:0">제 번</span><input id="qJob" class="field" style="width:150px" placeholder="제번 입력/선택" list="jobDL" autocomplete="off" oninput="apply()" onchange="jobPick()"><datalist id="jobDL"></datalist>
+  <span class="lb">품 번</span><input id="qItem" class="field" style="width:170px" placeholder="품번 입력/선택" list="pnDL" autocomplete="off" oninput="apply()" onchange="pnPick()"><datalist id="pnDL"></datalist>
   <span class="lb">고객사</span><input id="qCust" class="field" style="width:130px" oninput="apply()">
   <span class="lb">정 렬</span>
   <select id="qSort" class="field" style="width:130px" onchange="apply()">
@@ -138,18 +138,41 @@ async function load(){
  if(!online()){apply();return msg('DB 미연결 - 예시 데이터를 표시합니다.')}
  try{
   const rs=await MESDB.table('job_progress_view').select('select=*&order=job_no');
-  rows=rs||[];apply();
+  rows=rs||[];fillDLs();apply();
   msg(`${rows.length}건을 조회했습니다. (${new Date().toLocaleTimeString('ko-KR')})`);
  }catch(e){msg('조회 실패: '+String(e.message||e).slice(0,120))}
 }
 
 /* ── 필터·정렬 ───────────────────────────── */
+/* ── v124: 제번·품번(수주등록의 품번 = model) 드롭다운 + 직접입력 ───────── */
+function fillDLs(){
+ const jd=document.getElementById('jobDL'),pd=document.getElementById('pnDL');
+ if(jd)jd.innerHTML=rows.map(r=>`<option value="${String(r.job_no||'').replace(/"/g,'')}">${String(r.model||r.item_name||'').replace(/</g,'')}</option>`).join('');
+ if(pd){const seen=new Set(),out=[];
+  rows.forEach(r=>{const m=String(r.model||'').trim();if(!m||seen.has(m))return;seen.add(m);out.push({m,job:r.job_no})});
+  out.sort((a,b)=>a.m.localeCompare(b.m));
+  pd.innerHTML=out.map(o=>`<option value="${o.m.replace(/"/g,'')}">${String(o.job).replace(/</g,'')}</option>`).join('')}
+}
+/* 제번을 고르면 품번 칸을, 품번을 고르면 제번 칸을 채운다 */
+function jobPick(){
+ const v=String(qJob.value||'').trim();
+ const r=rows.find(x=>String(x.job_no)===v);
+ if(r)qItem.value=String(r.model||'');
+ apply();
+}
+function pnPick(){
+ const v=String(qItem.value||'').trim().toLowerCase();
+ if(v){const hit=rows.filter(x=>String(x.model||'').toLowerCase()===v);
+  const jobs=[...new Set(hit.map(x=>x.job_no))];
+  if(jobs.length===1)qJob.value=jobs[0];else if(jobs.length>1)qJob.value='';}
+ apply();
+}
 function apply(){
  const j=qJob.value.trim().toLowerCase(),i=qItem.value.trim().toLowerCase(),c=qCust.value.trim().toLowerCase();
  const onlyOpen=qOpen.checked;
  view=rows.filter(r=>{
   if(j&&!String(r.job_no||'').toLowerCase().includes(j))return false;
-  if(i&&!((String(r.item_name||'')+' '+String(r.product_name||'')).toLowerCase().includes(i)))return false;
+  if(i&&!((String(r.model||'')+' '+String(r.product_name||'')).toLowerCase().includes(i)))return false;
   if(c&&!String(r.customer_name||'').toLowerCase().includes(c))return false;
   if(onlyOpen&&r.st_delivery==='done')return false;
   if(fOwner&&r.next_owner!==fOwner)return false;
