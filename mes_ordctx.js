@@ -158,6 +158,16 @@ function ensureUI() {
 #oxPop .cf .btn.go.k-in{border-color:#b8681a;background:linear-gradient(#e08a2b,#b8681a)}
 #oxPop .cf .btn.warn{color:#a33;border-color:#c9a7a7}
 #oxPop .cf .btn:disabled{opacity:.5}
+/* v142: 우클릭으로 발주·입고·확정을 끝내므로 협력업체리스트·요청추가 바·구매요청 리스트를 감추고
+   제번리스트·자재표 리스트를 화면 높이만큼 넓힌다 (외주가공 발주 v116 과 같은 배치).
+   body.ox-classic 이면 옛 배치(요청 리스트·PRINT 발주서)로 돌아간다 — 코드는 그대로 둔다. */
+body:not(.ox-classic) .panes{grid-template-columns:minmax(300px,.9fr) 2.6fr!important;flex:1 1 auto!important;height:auto!important;min-height:0;padding-bottom:8px!important}
+body:not(.ox-classic) .panes>.box{height:auto!important;min-height:0!important;align-self:stretch!important;flex-grow:1!important}
+body:not(.ox-classic) .panes>.box:nth-child(3),body:not(.ox-classic) .midbar,body:not(.ox-classic) .reqbox{display:none!important}
+.panes>.box{min-width:0}.panes>.box:nth-child(2) table{min-width:0!important}
+#oxToggle{margin-left:auto;height:27px;border:1px solid #9ca9b5;background:linear-gradient(#fff,#dfe6eb);font:inherit;white-space:nowrap}
+body.ox-classic #oxToggle{background:linear-gradient(#f9ffff,#d2e7f6);color:#1e5e91;font-weight:700}
+@media(max-width:900px){body:not(.ox-classic) .panes{grid-template-columns:1fr!important}}
 @media(max-width:640px){
  #oxPop{width:96vw;left:2vw!important;right:2vw;top:auto!important;bottom:0;max-height:88vh}
  #oxPop .g{grid-template-columns:76px minmax(0,1fr)}
@@ -630,6 +640,22 @@ function init(opt) {
       s.title = '자재표 리스트에서 마우스 오른쪽 버튼(또는 더블클릭)을 누르면 상태에 맞는 처리 창이 열립니다';
       s.innerHTML = '※ 자재표 <b>우클릭</b> → 발주 · 입고 · 입고확정 · 취소';
       bar.appendChild(s);
+    }
+    /* 옛 배치(협력업체리스트·구매요청 리스트·PRINT 발주서) 토글 — 선택은 브라우저에 기억 */
+    if (bar && !$('oxToggle')) {
+      const key = 'ox_classic_' + CFG.category;
+      const apply = on => {
+        document.body.classList.toggle('ox-classic', !!on);
+        const b = $('oxToggle'); if (b) b.textContent = on ? '▤ 요청 리스트 닫기' : '▤ 요청 리스트 · 발주서';
+        try { localStorage.setItem(key, on ? '1' : ''); } catch (e) {}
+      };
+      const b = document.createElement('button');
+      b.type = 'button'; b.id = 'oxToggle';
+      b.title = '여러 품번을 한 번에 발주하거나 발주서(PRINT)를 뽑을 때 — 협력업체리스트·구매요청 리스트를 다시 보입니다';
+      b.onclick = () => apply(!document.body.classList.contains('ox-classic'));
+      bar.appendChild(b);
+      let saved = ''; try { saved = localStorage.getItem(key) || ''; } catch (e) {}
+      apply(saved === '1');
     }
   } catch (e) {}
 
