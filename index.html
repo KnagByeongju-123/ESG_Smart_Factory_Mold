@@ -45,9 +45,9 @@ input,select{font:inherit}
 .top-menu>li.pin>button{color:#fff;border-bottom-color:var(--amber);background:var(--steel-2)}
 /* v130: 상단 메가메뉴 — 마우스가 들어오면 부드럽게 나타나고, 벗어나면 살짝 늦게 닫힌다
    (display 전환은 애니메이션이 안 되므로 opacity·transform 으로 처리) */
-.mega{position:absolute;top:100%;left:0;display:flex;visibility:hidden;opacity:0;transform:translateY(-6px);pointer-events:none;transition:opacity .16s ease .12s,transform .16s ease .12s,visibility 0s linear .28s;background:var(--white);color:var(--ink);border:1px solid var(--line);border-radius:0 0 var(--r) var(--r);box-shadow:var(--shadow);padding:14px 4px;z-index:60;flex-wrap:wrap;width:max-content;max-width:calc(100vw - 24px);max-height:calc(100vh - var(--top-h) - 12px);overflow-y:auto;overscroll-behavior:contain}
+.mega{position:absolute;top:100%;left:0;display:flex;visibility:hidden;opacity:0;transform:translateY(-4px);pointer-events:none;transition:opacity .1s ease .06s,transform .1s ease .06s,visibility 0s linear .16s;background:var(--white);color:var(--ink);border:1px solid var(--line);border-radius:0 0 var(--r) var(--r);box-shadow:var(--shadow);padding:14px 4px;z-index:60;flex-wrap:wrap;width:max-content;max-width:calc(100vw - 24px);max-height:calc(100vh - var(--top-h) - 12px);overflow-y:auto;overscroll-behavior:contain}
 .top-menu>li:hover .mega,.top-menu>li.pin .mega{visibility:visible;opacity:1;transform:translateY(0);pointer-events:auto;
- transition:opacity .16s ease,transform .16s ease,visibility 0s}
+ transition:opacity .09s ease,transform .09s ease,visibility 0s}
 @media(prefers-reduced-motion:reduce){.mega,.top-menu>li:hover .mega,.top-menu>li.pin .mega{transition:none}}
 .mega .col{padding:0 16px 8px;border-right:1px solid var(--line);min-width:150px;align-self:start}
 .mega .col:last-child{border-right:0}
@@ -219,7 +219,7 @@ a.menu-off,a.menu-off:hover{color:#9aa5ae!important;opacity:.55;cursor:not-allow
 </div>
 
 <script>
-const APP_VER='130';
+const APP_VER='131';
 const APP={
   '영업관리':{
     secondary:[
