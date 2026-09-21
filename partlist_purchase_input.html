@@ -46,7 +46,8 @@ tbody tr.new td{color:#1d4f86}
 <div class="title"><h1>PartList 등록(구매품)</h1><small>설계관리 · PARTLIST</small></div>
 
 <section class="filt">
- <span class="lb">제 번</span><input id="q_job" class="field" style="width:190px">
+ <span class="lb">제 번</span><input id="q_job" class="field" style="width:190px" autocomplete="off">
+ <span class="lb">품 번</span><input id="q_pn" class="field" style="width:170px" placeholder="품번 입력/선택" list="pnDL" autocomplete="off"><datalist id="pnDL"></datalist>
  <span class="hint">제번 선택 → 엑셀 <b>금형번호·품명·형식·규격·수량</b> 복사(<b>Ctrl+C</b>) → <b>Ctrl+V</b> → 리스트에 추가 → 체크 → <b>[▤ 등록]</b></span>
 </section>
 
@@ -386,6 +387,44 @@ function manAdd(){
   +'. 체크 후 [▤ 등록]을 누르세요.');
 }
 
+
+/* ── v119: 품번(제품 품번)으로도 제번을 찾는다 — job_pool 의 job_no ↔ model ───── */
+const PNMAP=[];
+function pnFillDL(){
+ const dl=document.getElementById('pnDL');if(!dl)return;
+ const seen=new Set(),out=[];
+ PNMAP.forEach(x=>{if(seen.has(x.model))return;seen.add(x.model);out.push(x)});
+ out.sort((a,b)=>a.model.localeCompare(b.model));
+ dl.innerHTML=out.map(o=>`<option value="${o.model.replace(/"/g,'')}">${String(o.job).replace(/</g,'')}</option>`).join('');
+}
+async function pnLoad(){
+ try{
+  for(let i=0;i<60&&!window.MESDB;i++)await new Promise(r=>setTimeout(r,50));
+  if(window.MESDB&&MESDB.ready){try{await MESDB.ready}catch(e){}}
+  for(let i=0;i<20&&!(window.MESDB&&MESDB.online);i++)await new Promise(r=>setTimeout(r,150));
+  if(!(window.MESDB&&MESDB.online))return;
+  const rs=await MESDB.table('job_pool').select('select=job_no,model&order=row_no');
+  PNMAP.length=0;
+  (rs||[]).forEach(r=>{const m=String(r.model||'').trim();if(m)PNMAP.push({model:m,job:r.job_no})});
+  pnFillDL();
+ }catch(e){}
+}
+/* 품번을 고르거나 입력하면 → 그 제번으로 자재표를 연다 */
+function pnPick(){
+ const v=String(q_pn.value||'').trim();
+ if(!v)return;
+ const low=v.toLowerCase();
+ let list=PNMAP.filter(x=>x.model.toLowerCase()===low);
+ if(!list.length)list=PNMAP.filter(x=>x.model.toLowerCase().includes(low));
+ if(!list.length){msg(`품번 ${v} 로 등록된 제번이 없습니다. 수주등록의 품번을 확인하세요.`);return}
+ const jobs=[...new Set(list.map(x=>x.job))];
+ if(jobs.length>1){msg(`품번 ${v} 에 제번이 ${jobs.length}건 있습니다 — ${jobs.slice(0,6).join(', ')}${jobs.length>6?' …':''} · 제번 칸에서 고르세요.`);return}
+ q_job.value=jobs[0];
+ if(typeof loadJob==='function')loadJob(jobs[0]);
+ msg(`품번 ${list[0].model} → 제번 ${jobs[0]} 를 열었습니다.`);
+}
+/* 제번을 고르면 → 품번 칸을 같이 채운다 */
+function pnSync(job){const x=PNMAP.find(y=>y.job===job);q_pn.value=x?x.model:''}
 function search(){const j=curJobNo();if(j&&online())return loadJob(j);render()}
 window.MES={search,save,saveChecked,setMessage:msg,reload:loadJob,manOpen};render();
 (async()=>{await waitDB();const j=curJobNo();if(j)loadJob(j)})();
@@ -398,7 +437,9 @@ window.MES={search,save,saveChecked,setMessage:msg,reload:loadJob,manOpen};rende
 <script src="mes_ctx.js?v=114"></script>
 <script src="mes_jobpick.js?v=114"></script>
 <script>/* 제번 직접 타이핑 → 등록된 수주 목록에서 선택 */
-MESJOB.attach("q_job",{onPick:j=>loadJob(j)});
+try{MESJOB.attach("q_job",{onPick:j=>{loadJob(j);try{pnSync(j)}catch(e){}}})}catch(e){}
+try{pnLoad();q_pn.addEventListener("change",()=>{try{pnPick()}catch(e){}});
+ q_pn.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();try{pnPick()}catch(_){}}});}catch(e){}
 q_job.addEventListener('keydown',e=>{if(e.key==='Enter')search()});</script>
 <script>
 function sampleFill(){
