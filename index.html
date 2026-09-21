@@ -504,7 +504,9 @@ function locate(name){
   return null;
 }
 /* v116: 메뉴 비활성화 — 목록에는 흐리게 남기고 열리지 않게 한다 (외주가공은 QR스캔·외주가공 발주 화면에서 입고/입고확정 처리) */
-const MENU_OFF=new Set(['외주가공 입고','외주가공 입고확정','공정이력카드','외주가공 QR스캔','수정요청게시판','사용자정보','DB 동기화','부서정보','직급정보']);
+/* v143: 원재료·구매품도 발주 화면에서 자재표 우클릭으로 입고·입고확정까지 처리하므로 같이 내린다 */
+const MENU_OFF=new Set(['외주가공 입고','외주가공 입고확정','공정이력카드','외주가공 QR스캔','수정요청게시판','사용자정보','DB 동기화','부서정보','직급정보',
+ '원재료 입고','원재료 입고확정','구매품 입고','구매품 입고확정']);
 function flatMenu(){const out=[];for(const mod of visibleModules())for(const sec of (APP[mod]?.secondary||[]))for(const g of groupsOf(mod,sec.name))for(const n of g.items)if(!MENU_OFF.has(n))out.push({name:n,mod,sec:sec.name,group:g.name});return out}
 
 /* ---------- 상단 모듈 메뉴 (메가) ---------- */
