@@ -68,7 +68,7 @@ tbody tr.new td{color:#1d4f86}
 </div>
 
 <!-- 수동등록 -->
-<div class="xmask" id="mMask" onclick="if(event.target===mMask)manClose()"><div class="xdlg" style="width:min(580px,94vw)">
+<div class="xmask" id="mMask" onmousedown="mMask._d=(event.target===mMask)" onclick="if(event.target===mMask&&mMask._d)manClose()"><div class="xdlg" style="width:min(580px,94vw)">
  <div class="xhead"><span>수동등록 - 구매품 · 제번 <b id="mJob"></b></span><button onclick="manClose()">&times;</button></div>
  <div class="xbody" style="padding:12px">
   <div class="xrow"><span class="lb" style="width:44px">품번</span><input id="mPn" class="field" style="flex:1 1 150px" placeholder="필수" onkeydown="if(event.key==='Enter')mName.focus()"><span class="lb" style="width:44px">품명</span><input id="mName" class="field" style="flex:1 1 150px"></div>
@@ -80,7 +80,7 @@ tbody tr.new td{color:#1d4f86}
 </div></div>
 
 <!-- 엑셀 불러오기 (붙여넣기) -->
-<div class="xmask" id="xMask" onclick="if(event.target===xMask)xlsClose()"><div class="xdlg">
+<div class="xmask" id="xMask" onmousedown="xMask._d=(event.target===xMask)" onclick="if(event.target===xMask&&xMask._d)xlsClose()"><div class="xdlg">
  <div class="xhead"><span>엑셀 불러오기(구매품) - 제번 <b id="xJob"></b></span><button onclick="xlsClose()">×</button></div>
  <div class="xbody">
   <div style="padding:7px 9px;background:#e9f1f8;border:1px solid #bfd2e2;margin-bottom:6px;line-height:1.7">
@@ -100,7 +100,7 @@ tbody tr.new td{color:#1d4f86}
 </div></div>
 
 <!-- 일괄 등록 (등록자·등록일자) -->
-<div class="xmask" id="rMask" onclick="if(event.target===rMask)regClose()"><div class="xdlg" style="width:min(440px,94vw)">
+<div class="xmask" id="rMask" onmousedown="rMask._d=(event.target===rMask)" onclick="if(event.target===rMask&&rMask._d)regClose()"><div class="xdlg" style="width:min(440px,94vw)">
  <div class="xhead"><span>PartList 등록 - 구매품</span><button onclick="regClose()">&times;</button></div>
  <div class="xbody" style="padding:12px">
   <div id="rInfo" style="padding:8px;background:#fff;border:1px solid #cfd8e0;color:#455;margin-bottom:10px;line-height:1.7"></div>
@@ -111,7 +111,7 @@ tbody tr.new td{color:#1d4f86}
 </div></div>
 
 <!-- 일괄삭제 -->
-<div class="xmask" id="dMask" onclick="if(event.target===dMask)bulkClose()"><div class="xdlg" style="width:min(520px,94vw)">
+<div class="xmask" id="dMask" onmousedown="dMask._d=(event.target===dMask)" onclick="if(event.target===dMask&&dMask._d)bulkClose()"><div class="xdlg" style="width:min(520px,94vw)">
  <div class="xhead"><span>PartList 일괄삭제 - 구매품</span><button onclick="bulkClose()">&times;</button></div>
  <div class="xbody">
   <div class="xrow" style="margin-bottom:8px"><span class="lb">제 번</span><input id="dJob" class="field" style="width:170px" oninput="bulkReset()" onkeydown="if(event.key==='Enter')bulkCount()"><button class="btn" onclick="bulkCount()">⌕ 건수확인</button></div>
