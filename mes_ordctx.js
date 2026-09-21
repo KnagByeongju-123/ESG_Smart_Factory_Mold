@@ -1,0 +1,642 @@
+/* mes_ordctx.js — v142
+ * ─────────────────────────────────────────────────────────────────────────
+ * 원재료 발주 · 구매품 발주 화면에서 「자재표 리스트」 한 줄만 가지고
+ * 발주 → 입고 → 입고확정 까지 그 자리에서 끝낸다.
+ * 외주가공 발주(outsourcing_order_input.html) 의 공정 셀 우클릭 방식과 같다.
+ *
+ *   마우스 우클릭 (또는 더블클릭 / 모바일 길게누르기) → 상태에 맞는 창
+ *     미발주   → 발주창   : 업체·발주수량·발주일·입고요구일·단가·금액 → 즉시 DB 등록
+ *     발주     → 입고창   : 입고수량·입고일·입고단가 → order_lines 를 '입고' 로
+ *                           (발주취소 = 라인 삭제)
+ *     입고     → 확정창   : 확정일·네고율·확정가 → '입고확정'
+ *                           (입고취소 = '발주' 로 복귀)
+ *     입고확정 → 내역표시 (확정취소 = '입고' 로 복귀)
+ *   한 품번에 발주가 여러 건(분할발주·재발주)이면 먼저 발주 내역 목록을 보여주고
+ *   줄을 고르면 그 라인의 처리창이 열린다. [＋ 추가 발주] 로 새 발주도 바로 가능.
+ *
+ * 기존 화면(요청추가 → 구매요청 리스트 → 저장) 은 그대로 살아 있다.
+ * 이 파일은 화면 스크립트 뒤에 붙이면 renderBom / loadBom 을 감싸 동작한다.
+ *
+ * 사용법 (화면 맨 아래)
+ *   <script src="mes_ordctx.js?v=142"></script>
+ *   <script>MESORDCTX.init({category:'원재료',useWeight:true});</script>
+ *   <script>MESORDCTX.init({category:'구매품',useWeight:false});</script>
+ *
+ * 화면에 이미 있어야 하는 전역 : jobView, jobIdx, VENDORS, bomBody, msg(),
+ *                                renderBom(), loadBom()   (두 화면 모두 동일)
+ * ───────────────────────────────────────────────────────────────────────── */
+(function () {
+if (window.MESORDCTX) return;
+
+/* ── 공통 유틸 ─────────────────────────────────────────────── */
+const OWNER = (function () {
+  try { return (window.MES_AUTH || window.parent.MES_AUTH)?.name || '담당자'; }
+  catch (e) { return '담당자'; }
+})();
+const T0    = () => new Date().toISOString().slice(0, 10);
+const _esc  = v => String(v ?? '').replace(/[&<>"]/g, x => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[x]));
+const _n    = v => Number(String(v ?? '').replace(/[^0-9.\-]/g, '')) || 0;
+const _won  = v => _n(v).toLocaleString('ko-KR');
+const _dt   = v => String(v || '').slice(0, 10);
+const _online = () => !!(window.MESDB && window.MESDB.online);
+const $  = id => document.getElementById(id);
+const _v = id => { const e = $(id); return e ? e.value : ''; };
+function say(t) { try { if (typeof window.msg === 'function') window.msg(t); } catch (e) {} }
+/* 화면의 전역 변수 읽기.
+   화면 스크립트가 let/const 로 선언한 변수(jobView·jobIdx·VENDORS)는 window 에 붙지 않는다.
+   전역 렉시컬 환경까지 보려면 전역 스코프에서 도는 함수로 읽어야 한다. */
+const GV = (function () {
+  const c = {};
+  return n => {
+    try {
+      if (!c[n]) c[n] = new Function('return typeof ' + n + '!=="undefined"?' + n + ':undefined');
+      return c[n]();
+    } catch (e) { return undefined; }
+  };
+})();
+function pop(t, title) { try { (window.MESPOP || window.parent?.MESPOP)?.ok(t, title || '처리 완료'); } catch (e) {} }
+
+/* ── 설정 (init 에서 덮어씀) ───────────────────────────────── */
+let CFG = {
+  category : '원재료',   /* order_lines.category */
+  useWeight: true,       /* 금액 = 단가 × 중량(kg). false 면 단가 × 발주수량 */
+  priceKey : r => r.mat || r.part,
+  bySize   : true        /* 자재단가 조회 시 두께로 사이즈 매칭 */
+};
+
+/* ── 발주 라인 캐시 : 품번 → order_lines 행 배열 ───────────── */
+const LINES = new Map();
+let LINES_JOB = '';
+
+/* v142: 조회가 겹쳐도 같은 발주가 두세 번 쌓이지 않게 한다.
+   (처리 후 refresh 와 onChange 알림이 동시에 돌던 문제 — 결과는 지역 Map 에 담고 마지막 호출만 반영) */
+let _seq = 0;
+async function loadLines(job) {
+  const my = ++_seq;
+  if (!job || !_online()) { LINES.clear(); LINES_JOB = job || ''; return; }
+  const out = new Map();
+  try {
+    const rs = await MESDB.table('order_lines').select(
+      `select=*&category=eq.${encodeURIComponent(CFG.category)}` +
+      `&job_no=eq.${encodeURIComponent(job)}&order=line_id`, { fresh: true });
+    (rs || []).forEach(r => {
+      const k = r.part_no || '';
+      const a = out.get(k) || []; a.push(r); out.set(k, a);
+    });
+  } catch (e) { return; }              /* 조회 실패는 화면을 막지 않는다 (직전 내역 유지) */
+  if (my !== _seq) return;             /* 더 최근 조회가 시작됐으면 이번 결과는 버린다 */
+  LINES.clear(); out.forEach((v, k) => LINES.set(k, v)); LINES_JOB = job;
+}
+const linesOf = p => LINES.get(p) || [];
+const curJob  = () => (GV('jobView') || [])[GV('jobIdx')] || null;
+const vendorList = () => GV('VENDORS') || [];
+
+/* 품번의 진행 상태 : 남은 일(가장 앞선 단계) 기준 */
+function partState(p) {
+  const a = linesOf(p);
+  if (!a.length) return { code: '', label: '미발주', cls: 's-new', n: 0 };
+  const c = { 발주: 0, 입고: 0, 입고확정: 0 };
+  a.forEach(r => { if (c[r.status] != null) c[r.status]++; });
+  if (c.발주)     return { code: '발주',     label: '발주',  cls: 's-out',  n: c.발주 };
+  if (c.입고)     return { code: '입고',     label: '입고',  cls: 's-in',   n: c.입고 };
+  if (c.입고확정) return { code: '입고확정', label: '완료',  cls: 's-done', n: c.입고확정 };
+  return { code: '', label: '미발주', cls: 's-new', n: 0 };
+}
+/* 기발주 수량 (재발주분 제외) · 잔량 */
+function ordered(p) {
+  return linesOf(p).filter(r => !r.reorder_reason)
+    .reduce((s, r) => s + (Number(r.order_qty) || 0), 0);
+}
+function remain(b) { return Math.max(0, (Number(b.qty) || 0) - ordered(b.part)); }
+
+/* ── 스타일 · 팝업 DOM (한 번만 주입) ──────────────────────── */
+function ensureUI() {
+  if ($('oxPop')) return;
+
+  const st = document.createElement('style');
+  st.id = 'oxStyle';
+  st.textContent = `
+#bomBody td.ox{text-align:center;user-select:none;cursor:pointer;font-weight:700;white-space:nowrap;background:#fff!important;color:#8b98a3}
+#bomBody td.ox .st{display:block;font-size:10px;line-height:12px;font-weight:400}
+#bomBody td.ox.s-new {background:#8fdc6b!important;color:#20461a}
+#bomBody td.ox.s-out {background:#ffe9d1!important;color:#7a4a12}
+#bomBody td.ox.s-in  {background:#dbeaf8!important;color:#1a4f7a}
+#bomBody td.ox.s-done{background:#e6e9ec!important;color:#7d8993}
+.oxhint{margin-left:10px;color:#4a6b88;background:#eaf3fb;border:1px solid #c3daed;border-radius:12px;padding:3px 10px;white-space:nowrap;font-weight:400}
+.oxhint b{color:#1d5da3}
+#oxMask{position:fixed;inset:0;z-index:9000;display:none}#oxMask.on{display:block}
+#oxPop{position:fixed;z-index:9001;width:430px;max-width:96vw;background:#fff;border:1px solid #6f8090;
+ box-shadow:0 8px 26px rgba(0,0,0,.28);display:none;font:12px/1.5 "Malgun Gothic","맑은 고딕",Arial,sans-serif;color:#22303a}
+#oxPop.on{display:block}
+#oxPop .ch{display:flex;align-items:center;gap:8px;padding:0 8px 0 11px;height:31px;color:#fff;font-weight:700;background:linear-gradient(#5f7f9f,#3f5f7d)}
+#oxPop .ch.k-order{background:linear-gradient(#5e9e46,#3f7a2c)}
+#oxPop .ch.k-in{background:linear-gradient(#e08a2b,#b8681a)}
+#oxPop .ch.k-cfm{background:linear-gradient(#3f7fc4,#2a5d95)}
+#oxPop .ch .x{margin-left:auto;border:0;background:transparent;color:#fff;cursor:pointer;font:inherit;font-size:14px}
+#oxPop .cb{padding:9px 11px 6px;max-height:72vh;overflow:auto}
+#oxPop .sub{color:#4d5c69;margin-bottom:7px;line-height:1.5}#oxPop .sub b{color:#20456b}
+#oxPop .g{display:grid;grid-template-columns:80px minmax(0,1fr) 80px minmax(0,1fr);gap:5px 7px;align-items:center}
+#oxPop .g label{font-weight:700;text-align:right;color:#4d5c69;white-space:nowrap}
+#oxPop .g input,#oxPop .g select{width:100%;min-width:0;height:25px;border:1px solid #b9c3cb;padding:0 5px;
+ font:inherit;box-sizing:border-box;color:#22303a;background:#fff}
+#oxPop .g input.r{text-align:right}
+#oxPop .g .full{grid-column:2/5}
+#oxPop .note{font-size:11px;color:#6d7b88;margin-top:6px;line-height:1.45}
+#oxPop .info{display:grid;grid-template-columns:80px 1fr;gap:3px 8px}#oxPop .info b{color:#4d5c69;text-align:right}
+#oxPop table.ln{width:100%;border-collapse:collapse;margin-top:2px}
+#oxPop table.ln th,#oxPop table.ln td{border:1px solid #d5dde3;height:24px;padding:0 5px;white-space:nowrap;font-size:11px}
+#oxPop table.ln th{background:linear-gradient(#dbe9f4,#c7d9e8);color:#405266}
+#oxPop table.ln tbody tr{cursor:pointer}
+#oxPop table.ln tbody tr:hover td{background:#edf6fd}
+#oxPop table.ln td.r{text-align:right}#oxPop table.ln td.c{text-align:center}
+#oxPop .badge{display:inline-block;padding:0 5px;border-radius:7px;color:#fff;font-size:10px}
+#oxPop .b-out{background:#e07a1f}#oxPop .b-in{background:#2f6fb5}#oxPop .b-done{background:#8b98a3}
+#oxPop .cf{display:flex;gap:6px;justify-content:flex-end;padding:8px 11px 10px;border-top:1px solid #e3e9ed;background:#f7f9fa;flex-wrap:wrap}
+#oxPop .cf .btn{height:27px;min-width:72px;border:1px solid #9ca9b5;background:linear-gradient(#fff,#dfe6eb);font:inherit}
+#oxPop .cf .btn.go{font-weight:700;color:#fff;border-color:#2a5d95;background:linear-gradient(#4a8ad0,#2f6fb0)}
+#oxPop .cf .btn.go.k-order{border-color:#3f7a2c;background:linear-gradient(#5e9e46,#3f7a2c)}
+#oxPop .cf .btn.go.k-in{border-color:#b8681a;background:linear-gradient(#e08a2b,#b8681a)}
+#oxPop .cf .btn.warn{color:#a33;border-color:#c9a7a7}
+#oxPop .cf .btn:disabled{opacity:.5}
+@media(max-width:640px){
+ #oxPop{width:96vw;left:2vw!important;right:2vw;top:auto!important;bottom:0;max-height:88vh}
+ #oxPop .g{grid-template-columns:76px minmax(0,1fr)}
+ #oxPop .g .full{grid-column:2/3}
+ #oxPop .cf .btn{flex:1 1 auto}
+}`;
+  document.head.appendChild(st);
+
+  const mask = document.createElement('div'); mask.id = 'oxMask'; mask.onclick = close;
+  const p = document.createElement('div'); p.id = 'oxPop';
+  p.innerHTML = '<div class="ch" id="oxHead"><span id="oxTitle"></span><button class="x" type="button">✕</button></div>' +
+                '<div class="cb" id="oxBody"></div><div class="cf" id="oxFoot"></div>';
+  document.body.appendChild(mask); document.body.appendChild(p);
+  p.querySelector('.ch .x').onclick = close;
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
+}
+
+let CTX = null;                                    /* {b, i, line} */
+function close() { const m = $('oxMask'), p = $('oxPop'); if (m) m.classList.remove('on'); if (p) p.classList.remove('on'); CTX = null; }
+
+function open(ev, title, kind, bodyHtml, footBtns) {
+  ensureUI();
+  const p = $('oxPop');
+  $('oxTitle').textContent = title;
+  $('oxHead').className = 'ch ' + (kind || '');
+  $('oxBody').innerHTML = bodyHtml;
+  const f = $('oxFoot'); f.innerHTML = '';
+  (footBtns || [{ t: '닫기', fn: close }]).forEach(b => {
+    const el = document.createElement('button');
+    el.type = 'button'; el.className = 'btn ' + (b.cls || ''); el.textContent = b.t;
+    if (b.id) el.id = b.id;
+    if (b.title) el.title = b.title;
+    el.onclick = b.fn; f.appendChild(el);
+  });
+  $('oxMask').classList.add('on'); p.classList.add('on');
+  /* 마우스 위치 근처에, 화면 밖으로 나가지 않게 */
+  p.style.left = '0px'; p.style.top = '0px';
+  const W = p.offsetWidth || 430, H = p.offsetHeight || 260;
+  let x = (ev && ev.clientX != null ? ev.clientX : 40) + 6;
+  let y = (ev && ev.clientY != null ? ev.clientY : 40) + 6;
+  if (x + W > window.innerWidth  - 8) x = Math.max(8, window.innerWidth  - W - 8);
+  if (y + H > window.innerHeight - 8) y = Math.max(8, window.innerHeight - H - 8);
+  p.style.left = x + 'px'; p.style.top = y + 'px';
+  const first = p.querySelector('#oxBody input:not([readonly]),#oxBody select');
+  if (first) setTimeout(() => first.focus(), 30);
+  return false;
+}
+
+/* ── 진입점 : 자재표 한 줄 우클릭 ──────────────────────────── */
+function openPart(ev, idx) {
+  if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+  const j = curJob(); if (!j) { say('제번을 먼저 선택하세요.'); return false; }
+  const b = (j.bom || [])[idx]; if (!b) return false;
+  if (LINES_JOB !== j.job) { say('발주 내역을 불러오는 중입니다. 잠시 후 다시 시도하세요.'); loadLines(j.job).then(refresh); return false; }
+  CTX = { b, i: idx, job: j };
+  const a = linesOf(b.part);
+  if (!a.length) return formOrder(ev);
+  if (a.length === 1) return formLine(ev, a[0]);
+  return listLines(ev);
+}
+
+const headHtml = () => {
+  const { b, job } = CTX;
+  return `<div class="sub"><b>${_esc(job.job)}</b> · ${_esc(b.part)} ${_esc(b.name || '')}` +
+         `${b.mat ? ' · ' + _esc(b.mat) : ''}${b.spec ? ' · ' + _esc(b.spec) : ''}` +
+         ` · 자재표 수량 <b>${Number(b.qty) || 0}</b> / 기발주 ${ordered(b.part)} / 잔량 <b>${remain(b)}</b></div>`;
+};
+
+/* ── 발주가 여러 건인 품번 : 내역 목록 ─────────────────────── */
+function listLines(ev) {
+  const { b } = CTX;
+  const a = linesOf(b.part);
+  const bd = { 발주: 'b-out', 입고: 'b-in', 입고확정: 'b-done' };
+  const nm = { 발주: '발주', 입고: '입고', 입고확정: '확정' };
+  const rows = a.map((l, k) => `<tr data-k="${k}">
+    <td class="c"><span class="badge ${bd[l.status] || ''}">${nm[l.status] || _esc(l.status)}</span></td>
+    <td>${_esc(l.vendor_name || '')}${l.reorder_reason ? ' <b style="color:#a04000">재</b>' : ''}</td>
+    <td class="r">${Number(l.order_qty) || 0}</td>
+    <td class="r">${_won(l.confirm_price || l.quote_price)}</td>
+    <td class="c">${_esc(_dt(l.order_date))}</td>
+    <td class="c">${_esc(_dt(l.receipt_date))}</td></tr>`).join('');
+  open(ev, `${b.part} — 발주 내역 ${a.length}건`, '', headHtml() +
+    `<table class="ln"><thead><tr><th style="width:46px">상태</th><th>협력업체</th><th style="width:46px">수량</th>
+     <th style="width:76px">금액</th><th style="width:76px">발주일</th><th style="width:76px">입고일</th></tr></thead>
+     <tbody id="oxLn">${rows}</tbody></table>
+     <div class="note">줄을 클릭하면 그 발주건의 <b>입고 / 입고확정 / 취소</b> 창이 열립니다.</div>`,
+    [{ t: '＋ 추가 발주', cls: 'go k-order', fn: e => formOrder(e) },
+     { t: '닫기', fn: close }]);
+  $('oxLn').querySelectorAll('tr').forEach(tr => {
+    tr.onclick = e => formLine(e, a[Number(tr.dataset.k)]);
+  });
+  return false;
+}
+
+function formLine(ev, l) {
+  if (l.status === '발주')     return formReceive(ev, l);
+  if (l.status === '입고')     return formConfirm(ev, l);
+  if (l.status === '입고확정') return formDone(ev, l);
+  return open(ev, '처리할 수 없음', '', headHtml() +
+    `<div class="note">상태 「${_esc(l.status)}」 는 이 창에서 처리하지 않습니다.</div>`);
+}
+
+/* ── ① 발주 ────────────────────────────────────────────────── */
+function formOrder(ev) {
+  const { b, job } = CTX;
+  const vs = vendorList();
+  const rem = remain(b) || Number(b.qty) || 1;
+  const rd = (() => { try { return $('reqDate').value || T0(); } catch (e) { return T0(); } })();
+  open(ev, `${b.part} — 발주`, 'k-order', headHtml() + `
+   <div class="g">
+    <label>협력업체</label><select id="oxVendor" class="full"><option value="">(업체 선택)</option>${
+      vs.map(v => `<option value="${_esc(v)}">${_esc(v)}</option>`).join('')}</select>
+    <label>발주수량</label><input id="oxQty" class="r" value="${rem}" inputmode="numeric">
+    <label>발주일</label><input id="oxOdate" type="date" value="${T0()}">
+    <label>입고요구일</label><input id="oxRdate" type="date" value="${_esc(rd)}">
+    <label>단가</label><input id="oxPrice" class="r" placeholder="예: 45,000" inputmode="numeric">
+    ${CFG.useWeight ? '<label>중량(kg)</label><input id="oxWt" class="r" readonly>' : '<label></label><span></span>'}
+    <label>발주금액</label><input id="oxAmt" class="r" readonly placeholder="단가 입력 시 자동">
+    <label>재발주</label><select id="oxRe"><option value="">(정상 발주)</option><option>불량</option><option>실수</option><option>예비품</option><option>기타</option></select>
+    <label>비고</label><input id="oxRemark" placeholder="선택">
+   </div>
+   <div class="note" id="oxNote">업체를 고르면 단가변동등록에서 발주일 기준 단가를 자동 조회합니다. 이력이 없으면 직접 입력하세요.</div>`,
+   [{ t: '▣ 즉시 발주', cls: 'go k-order', id: 'oxGo', fn: doOrder },
+    { t: '닫기', fn: close }]);
+  $('oxVendor').onchange = autoPrice;
+  $('oxOdate').onchange  = autoPrice;
+  $('oxQty').onchange    = calcAmt;
+  $('oxPrice').onchange  = () => { $('oxPrice').dataset.auto = ''; calcAmt(); };
+  calcAmt();
+  return false;
+}
+
+function calcAmt() {
+  const { b } = CTX || {}; if (!b) return;
+  const p = $('oxPrice'), a = $('oxAmt'), w = $('oxWt');
+  const price = _n(p ? p.value : 0), qty = Math.max(1, _n(_v('oxQty')));
+  if (p) p.value = price ? _won(price) : '';
+  let base = qty;
+  if (CFG.useWeight) {
+    let kg = 0;
+    try { if (window.MESPRICE && MESPRICE.weightKg) kg = Number(MESPRICE.weightKg(b.spec, qty)) || 0; } catch (e) {}
+    if (w) w.value = kg ? kg.toFixed(2) : '';
+    if (kg) base = kg;
+  }
+  if (a) a.value = price ? _won(Math.round(price * base)) : '';
+}
+
+async function autoPrice() {
+  const { b } = CTX || {}; if (!b) return;
+  const v = _v('oxVendor'), d = _v('oxOdate') || T0();
+  const p = $('oxPrice'), note = $('oxNote');
+  if (!v || !window.MESPRICE) return calcAmt();
+  try {
+    const opt = { asOf: d };
+    if (CFG.bySize) { const th = Number(String(b.spec || '').split(/[*xX×]/)[0]); if (th > 0) opt.size = th; }
+    const hit = await MESPRICE.material(CFG.priceKey(b), v, opt);
+    if (p) {
+      if (hit && hit.price) { p.value = _won(hit.price); p.dataset.auto = '1'; }
+      else if (p.dataset.auto === '1' || !_n(p.value)) { p.value = ''; p.dataset.auto = ''; }
+    }
+    if (note) note.textContent = (hit && hit.price)
+      ? `단가 ${_won(hit.price)}원 (${v} · ${d} 기준 자동조회${hit.matched && hit.matched !== '일치' ? ' · ' + hit.matched : ''})`
+      : `${v} · ${CFG.priceKey(b)} 단가 이력이 없습니다 — 단가를 직접 입력하세요.`;
+  } catch (e) {}
+  calcAmt();
+}
+
+async function doOrder() {
+  const { b, job } = CTX;
+  const vendor = _v('oxVendor');
+  if (!vendor) return say('협력업체를 선택하세요.');
+  if (!_online()) return say('DB 미연결 - 즉시 발주는 사용할 수 없습니다. [요청추가]로 넣어두세요.');
+  const qty = Math.max(1, Math.round(_n(_v('oxQty'))));
+  const price = _n(_v('oxPrice'));
+  const amt = _n(_v('oxAmt'));
+  const re = _v('oxRe'), remark0 = (_v('oxRemark') || '').trim();
+  const rem = remain(b);
+
+  if (!re && rem > 0 && qty > rem &&
+      !confirm(`${b.part} 잔량 ${rem} 을(를) 넘는 발주입니다. (자재표 ${Number(b.qty) || 0} / 기발주 ${ordered(b.part)})\n\n그래도 발주할까요?`))
+    return say('발주를 취소했습니다. 발주수량을 확인하세요.');
+  if (!price &&
+      !confirm('단가가 입력되지 않았습니다.\n\n발주금액 0원으로 등록되어 제조원가에 반영되지 않습니다.\n그래도 발주할까요?'))
+    return say('단가를 입력한 뒤 다시 발주하세요.');
+  /* 같은 품번이 다른 업체로 미입고 발주돼 있으면 중복구매 경고 */
+  const other = linesOf(b.part).filter(l => l.status === '발주' && (l.vendor_name || '') !== vendor);
+  if (other.length &&
+      !confirm(`${b.part} 은(는) 아래 업체로 이미 발주(미입고)돼 있습니다.\n\n` +
+               other.slice(0, 5).map(l => ` · ${l.vendor_name || '(업체미지정)'} ${_dt(l.order_date)} ${Number(l.order_qty) || 0}개`).join('\n') +
+               `\n\n중복 구매가 될 수 있습니다. 계속할까요?`))
+    return say('발주를 취소했습니다.');
+  /* 협력업체 적격성 게이트 */
+  try { if (window.MESVCHK && MESVCHK.gate && !(await MESVCHK.gate([vendor]))) return say('협력업체 적격성 확인에서 중단했습니다.'); } catch (e) {}
+
+  const btn = $('oxGo'); if (btn) { btn.disabled = true; btn.textContent = '등록 중…'; }
+  try {
+    await MESDB.newLines([{
+      category: CFG.category, status: '발주',
+      vendor_name: vendor, job_no: job.job, item_name: job.item || null,
+      process_code: b.procCode || job.proc || null,
+      part_no: b.part, part_name: b.name || null,
+      material: b.mat || null, spec: b.spec || null,
+      order_qty: qty,
+      unit_price  : price || null,
+      quote_price : amt || null,
+      confirm_price: amt || null,
+      order_date  : _v('oxOdate') || T0(),
+      required_date: _v('oxRdate') || null,
+      owner_name  : OWNER,
+      remark      : (re ? `[재발주:${re}]` + (remark0 ? ' ' + remark0 : '') : (remark0 || null)) || null,
+      reorder_reason: re || null
+    }]);
+    await after(`${b.part} ${b.name || ''} → ${vendor} 발주 ${qty}개 등록 (${_won(amt)}원, 입고요구 ${_v('oxRdate') || '-'})`);
+  } catch (e) {
+    say('발주 실패: ' + String(e.message || e).slice(0, 120));
+    if (btn) { btn.disabled = false; btn.textContent = '▣ 즉시 발주'; }
+  }
+}
+
+/* ── ② 입고 ────────────────────────────────────────────────── */
+function formReceive(ev, l) {
+  const { b } = CTX; CTX.line = l;
+  const ord = Number(l.order_qty) || 0, got = Number(l.receipt_qty) || 0;
+  const rem = Math.max(ord - got, 0) || ord;
+  open(ev, `${b.part} — 입고`, 'k-in', headHtml() + `
+   <div class="info" style="margin-bottom:8px">
+    <b>협력업체</b><span>${_esc(l.vendor_name || '')}</span>
+    <b>발주일</b><span>${_esc(_dt(l.order_date))}</span>
+    <b>입고요구일</b><span>${_esc(_dt(l.required_date))}</span>
+    <b>발주수량</b><span>${ord}${got ? ` (기입고 ${got})` : ''}</span>
+    <b>발주금액</b><span>${_won(l.quote_price)}원</span></div>
+   <div class="g">
+    <label>입고수량</label><input id="oxInQty" class="r" value="${rem}" inputmode="numeric">
+    <label>입고일</label><input id="oxInDate" type="date" value="${T0()}">
+    <label>입고단가</label><input id="oxInPrice" class="r" value="${_won(l.unit_price)}" inputmode="numeric">
+    <label>입고금액</label><input id="oxInAmt" class="r" readonly>
+    <label>비고</label><input id="oxInRemark" class="full" placeholder="선택" value="${_esc(l.remark || '')}">
+   </div>
+   <div class="note">입고 처리하면 「입고」 상태가 되고, 다시 우클릭하면 <b>입고확정</b>(네고·확정가) 창이 열립니다.</div>`,
+   [{ t: '▣ 입고 처리', cls: 'go k-in', id: 'oxGo', fn: doReceive },
+    { t: '＋ 추가 발주', cls: 'go k-order', title: '같은 품번을 다른 업체에 나눠 발주하거나 재발주합니다', fn: e => formOrder(e) },
+    { t: '✖ 발주취소', cls: 'warn', title: '이 발주 라인을 삭제합니다', fn: doOrderCancel },
+    { t: '닫기', fn: close }]);
+  const f = () => {
+    const q = _n(_v('oxInQty')), p = _n(_v('oxInPrice'));
+    const w = CFG.useWeight ? (() => { try { return Number(MESPRICE.weightKg(CTX.b.spec, q)) || 0; } catch (e) { return 0; } })() : 0;
+    $('oxInPrice').value = p ? _won(p) : '';
+    $('oxInAmt').value = _won(Math.round(p * (w || q || 0)));
+  };
+  $('oxInQty').onchange = f; $('oxInPrice').onchange = f; f();
+  return false;
+}
+
+async function doReceive() {
+  const { b, line: l } = CTX;
+  if (!l || !l.line_id) return say('발주 라인을 찾을 수 없습니다. 다시 조회하세요.');
+  if (!_online()) return say('DB 미연결 - 입고 처리를 할 수 없습니다.');
+  const q = _n(_v('oxInQty'));
+  if (!(q > 0)) return say('입고수량을 입력하세요.');
+  const ord = Number(l.order_qty) || 0;
+  if (ord && q > ord && !confirm(`발주수량 ${ord} 보다 많습니다. 그래도 입고 처리할까요?`)) return;
+  const price = _n(_v('oxInPrice')), amt = _n(_v('oxInAmt'));
+  const btn = $('oxGo'); if (btn) { btn.disabled = true; btn.textContent = '처리 중…'; }
+  try {
+    await MESDB.table('order_lines').upsert([{
+      line_id: Number(l.line_id), status: '입고',
+      receipt_qty: q, receipt_date: _v('oxInDate') || T0(),
+      unit_price: price || null, receipt_amount: amt || null,
+      remark: (_v('oxInRemark') || '').trim() || null,
+      updated_at: new Date().toISOString()
+    }], 'line_id');
+    await after(`${b.part} ${l.vendor_name || ''} 입고 ${q}개 처리 — 입고확정(네고·확정가)은 다시 우클릭하세요.`);
+  } catch (e) {
+    say('입고 실패: ' + String(e.message || e).slice(0, 120));
+    if (btn) { btn.disabled = false; btn.textContent = '▣ 입고 처리'; }
+  }
+}
+
+async function doOrderCancel() {
+  const { b, line: l } = CTX;
+  if (!l || !l.line_id) return say('발주 라인을 찾을 수 없습니다.');
+  if (!_online()) return say('DB 미연결 - 발주취소를 할 수 없습니다.');
+  if (!confirm(`${b.part} · ${l.vendor_name || ''} 발주 ${Number(l.order_qty) || 0}개를 취소(삭제)합니다.\n되돌릴 수 없습니다. 계속할까요?`)) return;
+  try {
+    await MESDB.delLines([Number(l.line_id)]);
+    await after(`${b.part} ${l.vendor_name || ''} 발주를 취소(삭제)했습니다.`);
+  } catch (e) { say('발주취소 실패: ' + String(e.message || e).slice(0, 120)); }
+}
+
+/* ── ③ 입고확정 ────────────────────────────────────────────── */
+function formConfirm(ev, l) {
+  const { b } = CTX; CTX.line = l;
+  const quote = _n(l.receipt_amount) || _n(l.quote_price);
+  const fix = _n(l.confirm_price) || quote;
+  open(ev, `${b.part} — 입고확정`, 'k-cfm', headHtml() + `
+   <div class="info" style="margin-bottom:8px">
+    <b>협력업체</b><span>${_esc(l.vendor_name || '')}</span>
+    <b>입고일</b><span>${_esc(_dt(l.receipt_date))}</span>
+    <b>입고수량</b><span>${Number(l.receipt_qty) || Number(l.order_qty) || 0}</span></div>
+   <div class="g">
+    <label>확정일</label><input id="oxCdate" type="date" value="${T0()}">
+    <label>매입가</label><input id="oxQuote" class="r" value="${_won(quote)}" readonly>
+    <label>네고율(%)</label><input id="oxRate" class="r" value="${quote ? ((1 - fix / quote) * 100).toFixed(1) : '0'}" inputmode="decimal">
+    <label>확정가</label><input id="oxFix" class="r" value="${_won(fix)}" inputmode="numeric">
+   </div>
+   <div class="note">확정가가 제조원가(${CFG.category}비)에 반영됩니다. 네고율을 넣으면 확정가가, 확정가를 고치면 네고율이 맞춰집니다.</div>`,
+   [{ t: '▣ 입고확정', cls: 'go', id: 'oxGo', fn: doConfirm },
+    { t: '＋ 추가 발주', cls: 'go k-order', title: '같은 품번을 다른 업체에 나눠 발주하거나 재발주합니다', fn: e => formOrder(e) },
+    { t: '✖ 입고취소', cls: 'warn', title: '입고를 취소하고 발주 상태로 되돌립니다', fn: doReceiveCancel },
+    { t: '닫기', fn: close }]);
+  $('oxRate').onchange = () => { const q = _n(_v('oxQuote')); $('oxFix').value = _won(Math.round(q * (1 - _n(_v('oxRate')) / 100))); };
+  $('oxFix').onchange  = () => { const q = _n(_v('oxQuote')); $('oxRate').value = q ? ((1 - _n(_v('oxFix')) / q) * 100).toFixed(1) : '0'; };
+  return false;
+}
+
+async function doConfirm() {
+  const { b, line: l } = CTX;
+  if (!l || !l.line_id) return say('발주 라인을 찾을 수 없습니다.');
+  if (!_online()) return say('DB 미연결 - 입고확정을 할 수 없습니다.');
+  const quote = _n(_v('oxQuote')), fix = _n(_v('oxFix'));
+  const btn = $('oxGo'); if (btn) { btn.disabled = true; btn.textContent = '처리 중…'; }
+  try {
+    await MESDB.table('order_lines').upsert([{
+      line_id: Number(l.line_id), status: '입고확정',
+      confirm_date: _v('oxCdate') || T0(),
+      confirm_price: fix || null,
+      nego_rate: quote ? Number(((1 - fix / quote) * 100).toFixed(2)) : null,
+      updated_at: new Date().toISOString()
+    }], 'line_id');
+    await after(`${b.part} ${l.vendor_name || ''} 입고확정 (확정가 ${_won(fix)}원) — 제조원가에 반영됩니다.`);
+  } catch (e) {
+    say('입고확정 실패: ' + String(e.message || e).slice(0, 120));
+    if (btn) { btn.disabled = false; btn.textContent = '▣ 입고확정'; }
+  }
+}
+
+async function doReceiveCancel() {
+  const { b, line: l } = CTX;
+  if (!l || !l.line_id) return say('발주 라인을 찾을 수 없습니다.');
+  if (!_online()) return say('DB 미연결 - 입고취소를 할 수 없습니다.');
+  if (!confirm(`${b.part} · ${l.vendor_name || ''} 의 입고를 취소합니다.\n발주 상태로 돌아가며 입고수량·입고일이 지워집니다. 계속할까요?`)) return;
+  try {
+    await MESDB.table('order_lines').upsert([{
+      line_id: Number(l.line_id), status: '발주',
+      receipt_qty: 0, receipt_date: null, receipt_amount: null,
+      updated_at: new Date().toISOString()
+    }], 'line_id');
+    await after(`${b.part} 입고를 취소했습니다. (발주 상태로 복귀)`);
+  } catch (e) { say('입고취소 실패: ' + String(e.message || e).slice(0, 120)); }
+}
+
+/* ── ④ 완료 내역 ───────────────────────────────────────────── */
+function formDone(ev, l) {
+  const { b } = CTX; CTX.line = l;
+  open(ev, `${b.part} — 입고확정 완료`, '', headHtml() + `
+   <div class="info">
+    <b>협력업체</b><span>${_esc(l.vendor_name || '')}</span>
+    <b>발주일</b><span>${_esc(_dt(l.order_date))}</span>
+    <b>입고일</b><span>${_esc(_dt(l.receipt_date))}</span>
+    <b>확정일</b><span>${_esc(_dt(l.confirm_date))}</span>
+    <b>발주수량</b><span>${Number(l.order_qty) || 0}</span>
+    <b>입고수량</b><span>${Number(l.receipt_qty) || 0}</span>
+    <b>매입가</b><span>${_won(l.receipt_amount || l.quote_price)}원</span>
+    <b>네고율</b><span>${Number(l.nego_rate) || 0}%</span>
+    <b>확정가</b><span>${_won(l.confirm_price)}원</span></div>
+   <div class="note">확정취소를 하면 「입고」 상태로 돌아가 확정가를 다시 잡을 수 있습니다.</div>`,
+   [{ t: '＋ 추가 발주', cls: 'go k-order', title: '같은 품번을 다른 업체에 나눠 발주하거나 재발주합니다', fn: e => formOrder(e) },
+    { t: '✖ 확정취소', cls: 'warn', fn: doConfirmCancel },
+    { t: '닫기', fn: close }]);
+  return false;
+}
+
+async function doConfirmCancel() {
+  const { b, line: l } = CTX;
+  if (!l || !l.line_id) return say('발주 라인을 찾을 수 없습니다.');
+  if (!_online()) return say('DB 미연결 - 확정취소를 할 수 없습니다.');
+  if (!confirm(`${b.part} · ${l.vendor_name || ''} 의 입고확정을 취소합니다.\n확정일·확정가가 지워지고 「입고」 상태로 돌아갑니다. 계속할까요?`)) return;
+  try {
+    await MESDB.table('order_lines').upsert([{
+      line_id: Number(l.line_id), status: '입고',
+      confirm_date: null, confirm_price: null, nego_rate: null,
+      updated_at: new Date().toISOString()
+    }], 'line_id');
+    await after(`${b.part} 입고확정을 취소했습니다. (입고 상태로 복귀)`);
+  } catch (e) { say('확정취소 실패: ' + String(e.message || e).slice(0, 120)); }
+}
+
+/* ── 처리 후 공통 : 캐시 비우고 다시 그린다 ────────────────── */
+async function after(text) {
+  try { MESDB.dropCache && MESDB.dropCache('order_lines'); } catch (e) {}
+  try { MESDB.notify && MESDB.notify(['order_lines']); } catch (e) {}
+  close();
+  await refresh();
+  say(text); pop(text);
+}
+async function refresh() {
+  const j = curJob(); if (!j) return;
+  await loadLines(j.job);
+  try { if (typeof window.loadOrdQ === 'function') await window.loadOrdQ(j.job); } catch (e) {}
+  try { window.renderBom(); } catch (e) {}
+}
+
+/* ── 자재표 리스트에 「진행」 칸 붙이기 ────────────────────── */
+function decorate() {
+  const j = curJob(); if (!j || !j.bom) return;
+  const tb = $('bomBody'); if (!tb) return;
+  const ready = (LINES_JOB === j.job);
+  tb.querySelectorAll('input[type=checkbox][data-i]').forEach(cb => {
+    const i = Number(cb.dataset.i), b = j.bom[i]; if (!b) return;
+    const tr = cb.closest('tr'); if (!tr) return;
+    let td = tr.querySelector('td.ox');
+    if (!td) { td = document.createElement('td'); td.className = 'ox'; tr.insertBefore(td, tr.cells[tr.cells.length - 1]); }
+    if (!ready) { td.className = 'ox'; td.textContent = '…'; td.title = '발주 내역을 불러오는 중'; return; }
+    const s = partState(b.part), a = linesOf(b.part);
+    td.className = 'ox ' + s.cls;
+    td.innerHTML = _esc(s.label) + (a.length > 1 ? `<span class="st">${a.length}건</span>` : '');
+    td.title = (s.code === ''
+      ? '우클릭 → 발주 (업체·수량·단가를 넣고 즉시 등록)'
+      : `${a.length}건 · ` + a.map(l => `${l.vendor_name || ''} ${Number(l.order_qty) || 0}개 ${l.status}`).join(' / ')) +
+      '\n우클릭(또는 더블클릭) → 발주 · 입고 · 입고확정 · 취소';
+    tr.oncontextmenu = ev => openPart(ev, i);
+    tr.ondblclick    = ev => openPart(ev, i);
+    /* 모바일 : 길게 누르기 */
+    let tm = null;
+    tr.ontouchstart = ev => { tm = setTimeout(() => openPart({ preventDefault(){}, stopPropagation(){}, clientX: ev.touches[0].clientX, clientY: ev.touches[0].clientY }, i), 500); };
+    tr.ontouchend = tr.ontouchmove = () => { clearTimeout(tm); };
+  });
+}
+
+/* ── 화면 연결 ─────────────────────────────────────────────── */
+function init(opt) {
+  CFG = Object.assign(CFG, opt || {});
+  ensureUI();
+
+  /* renderBom 뒤에 진행칸을 붙인다 (기존 발주수량 칸 처리 뒤에 온다) */
+  const _rb = window.renderBom;
+  if (typeof _rb === 'function') window.renderBom = function () { const r = _rb.apply(this, arguments); try { decorate(); } catch (e) {} return r; };
+
+  /* 제번을 바꿔 자재표를 다시 읽으면 발주 내역도 다시 읽는다 */
+  const _lb = window.loadBom;
+  if (typeof _lb === 'function') window.loadBom = async function () {
+    const r = await _lb.apply(this, arguments);
+    const j = curJob(); if (j) { await loadLines(j.job); try { window.renderBom(); } catch (e) {} }
+    return r;
+  };
+
+  /* 다른 화면(입고등록·입고확정 등)에서 바뀌면 자동 반영 */
+  const bind = () => {
+    if (window.MESDB && MESDB.onChange) { MESDB.onChange(['order_lines'], () => { refresh(); }); return true; }
+    return false;
+  };
+  if (!bind()) { let n = 0; const iv = setInterval(() => { if (bind() || ++n > 40) clearInterval(iv); }, 150); }
+
+  /* 공용 삭제확인창(mes_ctx.js)이 이 팝업의 취소 버튼까지 한 번 더 붙잡지 않게 한다.
+     ─ 이 창은 품번·업체·수량이 들어간 자체 확인문을 띄우므로 그쪽이 더 친절하다. */
+  try {
+    const opt = window.MES_CTX_OPT || {};
+    const mine = /^\s*✖?\s*(발주취소|입고취소|확정취소)\s*$/;
+    const prev = opt.noGuard;
+    opt.noGuard = prev ? { test: s => prev.test(s) || mine.test(String(s)) } : mine;
+    window.MES_CTX_OPT = opt;
+  } catch (e) {}
+
+  /* 안내 뱃지 */
+  try {
+    const bar = document.querySelector('.filters');
+    if (bar && !bar.querySelector('.oxhint')) {
+      const s = document.createElement('span');
+      s.className = 'oxhint';
+      s.title = '자재표 리스트에서 마우스 오른쪽 버튼(또는 더블클릭)을 누르면 상태에 맞는 처리 창이 열립니다';
+      s.innerHTML = '※ 자재표 <b>우클릭</b> → 발주 · 입고 · 입고확정 · 취소';
+      bar.appendChild(s);
+    }
+  } catch (e) {}
+
+  /* 첫 로드 */
+  setTimeout(refresh, 400);
+  setTimeout(refresh, 1500);
+}
+
+window.MESORDCTX = { init, refresh, loadLines, partState, close };
+})();
