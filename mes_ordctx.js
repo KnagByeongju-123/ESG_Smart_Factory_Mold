@@ -161,7 +161,11 @@ function ensureUI() {
 /* v142: 우클릭으로 발주·입고·확정을 끝내므로 협력업체리스트·요청추가 바·구매요청 리스트를 감추고
    제번리스트·자재표 리스트를 화면 높이만큼 넓힌다 (외주가공 발주 v116 과 같은 배치).
    body.ox-classic 이면 옛 배치(요청 리스트·PRINT 발주서)로 돌아간다 — 코드는 그대로 둔다. */
-body:not(.ox-classic) .panes{grid-template-columns:minmax(280px,.85fr) 2.7fr!important;flex:1 1 auto!important;height:auto!important;min-height:0;padding-bottom:8px!important}
+body:not(.ox-classic) .panes{grid-template-columns:minmax(340px,1.1fr) 2.2fr!important;flex:1 1 auto!important;height:auto!important;min-height:0;padding-bottom:8px!important}
+/* 제번리스트는 제번·품번·공정·공정명이 다 보이도록 넓게, 자재표는 그만큼 줄인다.
+   표는 칸 폭에 맞춰 고정 — 안쪽에 가로 스크롤이 생겨 열이 잘리는 일을 막는다. */
+body:not(.ox-classic) .panes>.box .tablewrap{overflow-x:hidden!important;overflow-y:auto!important}
+body:not(.ox-classic) .panes>.box table{width:100%!important;min-width:0!important;table-layout:fixed!important}
 /* 저장된 배치(ui_layout)가 블록에 직접 박아 둔 width·height 를 무시한다.
    ─ 제번리스트에 width:518px 이 남아 있어 표가 잘리고, 숨긴 협력업체리스트 자리(460px)까지
      그대로 차지하면서 자재표가 화면 밖으로 밀려났다. 이 배치는 두 리스트가 창을 꽉 채운다. */
