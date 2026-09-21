@@ -257,7 +257,9 @@ function detail(r){
 function toggle(job){open.has(job)?open.delete(job):open.add(job);render()}
 function expandAll(on){open=on?new Set(view.map(r=>r.job_no)):new Set();render()}
 /* 진행삭제: 수주정보(제번)까지 포함해 그 제번의 모든 기록을 지운다 (관리자만) */
-function canReset(){try{const a=MESDB.auth&&MESDB.auth();const r=a&&a.role;return r==='master'||r==='admin'}catch(e){return false}}
+/* v117: 로그인을 쓰지 않으므로 권한으로 숨기지 않는다. 다른 화면들과 같은 규칙
+   (로그인 모듈 없음 → 제한 없음). 실수 방지는 확인창 + 제번 재입력으로 한다. */
+function canReset(){try{const a=MESDB.auth&&MESDB.auth();if(!a)return true;const r=a.role;return r==='master'||r==='admin'}catch(e){return true}}
 async function resetJob(job){
  if(!online())return msg('DB 미연결 - 진행삭제를 사용할 수 없습니다.');
  const ok=confirm(`[${job}] 을(를) 완전히 삭제합니다.\n\n삭제 대상: 수주정보(제번), 제작계획, 외주설계·원재료·구매품·외주가공 발주/입고, 설계계획·실적, PartList, 가공계획·작업지시·이력카드, 조립실적, 검사실적, SET발주, 경비\n\n되돌릴 수 없습니다. 계속할까요?`);
@@ -287,7 +289,11 @@ async function resetJob(job){
   }else{
    msg(`${job} 을(를) 삭제했습니다. ${r&&r.deleted!=null?r.deleted+'건':''}`+(tabs?` (${tabs})`:''));
   }
- }catch(e){msg('진행삭제 실패: '+String(e.message||e).slice(0,140))}
+ }catch(e){const m=String(e.message||e);
+  if(/PGRST202|404|Could not find the function|mes_reset_job_progress/i.test(m)){
+   alert('진행삭제 기능이 DB 에 설치되어 있지 않습니다.\n\n관리자에게 mes_reset_job_progress 함수 설치를 요청하세요.\n(아무것도 삭제되지 않았습니다)');
+   msg('진행삭제 실패: DB 에 mes_reset_job_progress 함수가 없습니다. 아무것도 삭제되지 않았습니다.');
+  }else msg('진행삭제 실패: '+m.slice(0,140))}
 }
 function goScreen(name){
  try{if(window.parent&&window.parent.openByName){window.parent.openByName(name);return}}catch(e){}
