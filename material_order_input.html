@@ -171,14 +171,29 @@ function fillModelDL(){const dl=document.getElementById('modelDL');if(!dl)return
  dl.innerHTML=out.map(o=>`<option value="${String(o.m).replace(/"/g,'')}">${String(o.job).replace(/</g,'')}</option>`).join('')}
 function jobExact(no){no=String(no||'').trim().toLowerCase();if(!no)return null;return JOBS.find(x=>String(x.job).toLowerCase()===no)||null}
 function selectJobRow(no){const i=jobView.findIndex(x=>x.job===no);if(i>=0)pickJob(i)}
-/* 제번을 고르거나 다 입력하면 → 모델 칸을 채우고 그 제번을 선택한다 */
-function onJobPick(){const j=jobExact(jobQ.value);if(j)modelQ.value=j.model||'';applyFilter();if(j)selectJobRow(j.job)}
-/* 모델을 고르면 → 그 모델의 제번을 제번 칸에 넣고 선택한다 (여러 건이면 목록만 걸러 준다) */
-function onModelPick(){const m=String(modelQ.value||'').trim().toLowerCase();
- if(m){const hit=JOBS.filter(x=>String(x.model||'').toLowerCase()===m);
-  if(hit.length===1){jobQ.value=hit[0].job;applyFilter();selectJobRow(hit[0].job);return}
-  if(hit.length>1)jobQ.value=''}
- applyFilter()}
+/* 제번을 고르거나 입력하면 → 같은 행의 모델을 채우고 그 제번을 선택한다.
+   정확히 일치하지 않아도 걸러진 결과가 한 건이면 그 행으로 맞춘다. */
+function onJobPick(){
+ let j=jobExact(jobQ.value);
+ applyFilter();
+ if(!j&&jobView.length===1)j=jobView[0];
+ if(!j){if(!jobQ.value.trim())modelQ.value='';return}
+ if(modelQ.value!==(j.model||'')){modelQ.value=j.model||'';applyFilter()}
+ selectJobRow(j.job);
+}
+/* 모델을 고르거나 입력하면 → 같은 행의 제번을 채우고 선택한다 (여러 제번이 같은 모델이면 목록만 걸러 준다) */
+function onModelPick(){
+ const m=String(modelQ.value||'').trim().toLowerCase();
+ if(!m){applyFilter();return}
+ const hit=JOBS.filter(x=>String(x.model||'').toLowerCase()===m);
+ if(hit.length>1&&jobQ.value.trim()&&!hit.some(x=>x.job===jobQ.value.trim()))jobQ.value='';
+ if(hit.length!==1&&jobQ.value.trim()&&!JOBS.some(x=>x.job===jobQ.value.trim()&&String(x.model||'').toLowerCase()===m))jobQ.value='';
+ applyFilter();
+ const j=(hit.length===1)?hit[0]:(jobView.length===1?jobView[0]:null);
+ if(!j)return;
+ if(jobQ.value!==j.job){jobQ.value=j.job;applyFilter()}
+ selectJobRow(j.job);
+}
 function applyFilter(){const j=jobQ.value.trim().toLowerCase(),md=modelQ.value.trim().toLowerCase();
  jobView=JOBS.filter(x=>(!j||x.job.toLowerCase().includes(j))&&(!md||(x.model||'').toLowerCase().includes(md)));
  jobIdx=0;renderJobs();renderBom();renderReq();
