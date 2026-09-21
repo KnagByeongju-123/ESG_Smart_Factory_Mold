@@ -57,12 +57,13 @@ function sel(tr){document.querySelectorAll('#body tr').forEach(x=>x.classList.re
 /* v139: 개발유형 체크박스(복수) · 제번/품번 콤보(드롭+직접입력, 상호연동) · 품명→품번 */
 const esc=v=>String(v??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const JOBS=[];const MODEL_OF={};
-function fillDL(){jobDL.innerHTML=JOBS.map(r=>`<option value="${esc(r.job_no)}">${esc(r.model||'')}${r.customer_name?' · '+esc(r.customer_name):''}</option>`).join('');
+const ALL='모두';
+function fillDL(){jobDL.innerHTML=`<option value="${ALL}">전체 제번</option>`+JOBS.map(r=>`<option value="${esc(r.job_no)}">${esc(r.model||'')}${r.customer_name?' · '+esc(r.customer_name):''}</option>`).join('');
  const ms=[...new Set(JOBS.map(r=>r.model).filter(Boolean))];
- modelDL.innerHTML=ms.map(m=>`<option value="${esc(m)}">${esc(JOBS.filter(r=>r.model===m).map(r=>r.job_no).join(', '))}</option>`).join('')}
+ modelDL.innerHTML=`<option value="${ALL}">전체 품번</option>`+ms.map(m=>`<option value="${esc(m)}">${esc(JOBS.filter(r=>r.model===m).map(r=>r.job_no).join(', '))}</option>`).join('')}
 async function loadJobs(){if(!_online())return;try{const rs=await MESDB.table('job_pool').select('select=job_no,model,customer_name&order=row_no');JOBS.length=0;rs.forEach(r=>{JOBS.push(r);MODEL_OF[r.job_no]=r.model||''});fillDL()}catch(e){}}
-function onJobPick(){const v=jobQ.value.trim();const r=JOBS.find(x=>x.job_no===v);if(r&&r.model!=null)itemQ.value=r.model||''}
-function onModelPick(){const v=itemQ.value.trim();if(!v)return;const cur=jobQ.value.trim();if(JOBS.some(x=>x.job_no===cur&&x.model===v))return;const r=JOBS.find(x=>x.model===v);if(r)jobQ.value=r.job_no}
+function onJobPick(){const v=jobQ.value.trim();if(v===ALL){jobQ.value='';itemQ.value='';return}const r=JOBS.find(x=>x.job_no===v);if(r&&r.model!=null)itemQ.value=r.model||''}
+function onModelPick(){const v=itemQ.value.trim();if(v===ALL){jobQ.value='';itemQ.value='';return}if(!v)return;const cur=jobQ.value.trim();if(JOBS.some(x=>x.job_no===cur&&x.model===v))return;const r=JOBS.find(x=>x.model===v);if(r)jobQ.value=r.job_no}
 jobQ.addEventListener('change',()=>{onJobPick();search()});itemQ.addEventListener('change',()=>{onModelPick();search()});
 [jobQ,itemQ].forEach(el=>el.addEventListener('keydown',e=>{if(e.key==='Enter')search()}));
 const devBoxes=()=>[...document.querySelectorAll('input[name=dev]')];
@@ -120,8 +121,8 @@ async function applyPurchase(){
 month.addEventListener('change',async()=>{await applyPurchase();search()});
 window.MES={search,exportCsv,setMessage:msg,reload:()=>{_CONF=null;return loadLive()}};loadLive();
 </script>
-<script src="mes_db.js?v=139"></script>
+<script src="mes_db.js?v=140"></script>
 
-<script src="mes_ctx.js?v=139"></script>
+<script src="mes_ctx.js?v=140"></script>
 </body>
 </html>
