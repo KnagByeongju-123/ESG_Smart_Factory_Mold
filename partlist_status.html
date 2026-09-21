@@ -112,7 +112,9 @@ async function loadJob(job){
  if(nj!==curJob)chk.clear();
  curJob=nj;
  try{
-  const rs=await MESDB.table('partlist_all').select(`select=*&job_no=eq.${encodeURIComponent(nj)}&order=order_type,part_no`);
+  /* v128: partlist_all 은 뷰 — 원본 테이블을 지워도 이 뷰의 조회 캐시는 그대로 남는다.
+     삭제 직후에도 실제 상태가 보이도록 캐시를 건너뛰고 읽는다. */
+  const rs=await MESDB.table('partlist_all').select(`select=*&job_no=eq.${encodeURIComponent(nj)}&order=order_type,part_no`,{fresh:true});
   data.length=0;
   rs.forEach((r,i)=>data.push({...r,_id:i+1}));
   chk.clear();render();
@@ -157,7 +159,11 @@ function pnPick(){
 /* 제번을 고르면 → 품번 칸도 채운다 */
 function pnSync(job){const x=PNMAP.find(y=>y.job===job);q_pn.value=x?x.model:''}
 function search(){const j=curJobNo();if(!j){msg('제번을 먼저 선택하세요.');q_job.focus();return}loadJob(j)}
-const notify=()=>{try{MESDB.notify&&MESDB.notify(['partlist_materials','partlist_purchases'])}catch(e){}};
+const notify=()=>{
+ try{MESDB.notify&&MESDB.notify(['partlist_materials','partlist_purchases','partlist_all'])}catch(e){}
+ /* 뷰·원본 테이블 조회 캐시를 모두 비운다 */
+ ['partlist_all','partlist_materials','partlist_purchases'].forEach(t=>{try{MESDB.dropCache&&MESDB.dropCache(t)}catch(e){}});
+};
 
 /* 선택 삭제 — 원본 테이블에서 제번+공정+품번 키로 삭제 */
 async function del_(){
