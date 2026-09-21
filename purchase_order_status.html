@@ -43,11 +43,11 @@ tfoot th{position:sticky;bottom:0;background:linear-gradient(#e6eef5,#d3e0ea)}
   </section>
   <div class="gridbox"><div class="tablewrap"><table>
     <colgroup><col style="width:44px"><col style="width:76px"><col style="width:104px"><col style="width:104px"><col style="width:96px"><col style="width:46px"><col style="width:58px"><col style="width:66px"><col style="width:140px"><col style="width:56px"><col style="width:140px"><col style="width:56px"><col style="width:62px"><col style="width:92px"><col style="width:96px"><col style="width:92px"><col style="width:96px"><col style="width:100px"></colgroup>
-    <thead><tr><th>No</th><th>구분</th><th>업체명</th><th>제번</th><th>품명</th><th>공정</th><th>공정명</th><th>품번</th><th>부품명</th><th>재질</th><th>스펙</th><th>수량</th><th>단가</th><th>발주월</th><th>입고요구일</th><th>입고월</th><th>입고확정일</th><th>견적가</th></tr></thead>
+    <thead><tr><th style="width:34px" title="전체 선택 / 해제"><input type="checkbox" id="chkAll" onclick="checkAll(this.checked)"></th><th>No</th><th>구분</th><th>업체명</th><th>제번</th><th>품명</th><th>공정</th><th>공정명</th><th>품번</th><th>부품명</th><th>재질</th><th>스펙</th><th>수량</th><th>단가</th><th>발주월</th><th>입고요구일</th><th>입고월</th><th>입고확정일</th><th>견적가</th></tr></thead>
     <tbody id="body"></tbody>
-    <tfoot><tr><th colspan="11" class="r">합 계</th><th class="r" id="sumQty">0</th><th colspan="5"></th><th class="r" id="sumQuote">0</th></tr></tfoot>
+    <tfoot><tr><th colspan="12" class="r">합 계</th><th class="r" id="sumQty">0</th><th colspan="5"></th><th class="r" id="sumQuote">0</th></tr></tfoot>
   </table></div></div>
-  <footer class="foot"><button class="btn" onclick="search()">⌕ 검색</button><button class="btn primary" onclick="exportCsv()">▤ EXCEL</button><button class="btn danger" onclick="cancelOrder()" title="선택한 발주 행을 취소합니다 (입고 전만 가능)">✕ 발주취소</button><button class="btn" onclick="window.parent?.closeActive?.()">⊠ 닫 기</button><span class="msg" id="message">구매품 발주현황을 조회했습니다.</span><span class="right" id="countText"></span></footer>
+  <footer class="foot"><button class="btn" onclick="search()">⌕ 검색</button><button class="btn primary" onclick="exportCsv()">▤ EXCEL</button><button class="btn" onclick="cancelConfirm()" title="체크한 입고확정 건을 「입고」 상태로 되돌립니다">✖ 입고확정취소</button><button class="btn danger" onclick="cancelOrder()" title="선택한 발주 행을 취소합니다 (입고 전만 가능)">✕ 발주취소</button><button class="btn" onclick="window.parent?.closeActive?.()">⊠ 닫 기</button><span class="msg" id="message">구매품 발주현황을 조회했습니다.</span><span class="right" id="countText"></span></footer>
 </div>
 <script>
 const rows=[];
@@ -58,9 +58,40 @@ let selIdx=-1;
 const ST=v=>v==='대기'?'발주':v==='확정'?'입고확정':(v||'');
 const online=()=>!!(window.MESDB&&MESDB.online);
 function within(v,a,b){if(!a&&!b)return true;if(!v)return false;return (!a||v>=a)&&(!b||v<=b)}
-function render(){selIdx=-1;body.innerHTML=view.length?view.map((r,i)=>`<tr onclick="sel(this,${i})"><td class="c">${i+1}</td><td class="c"><span class="tag t-${ST(r.st)}">${ST(r.st)}</span></td><td>${r.vendor}</td><td>${r.job}</td><td>${r.item}</td><td class="c">${r.proc}</td><td class="c">${r.procName}</td><td>${r.part}</td><td>${r.partName}</td><td class="c">${r.mat}</td><td>${r.spec}</td><td class="r">${r.qty}</td><td class="r">${money(r.price)}</td><td class="c">${r.odate}</td><td class="c">${r.rdate}</td><td class="c">${r.idate}</td><td class="c">${r.cdate}</td><td class="r">${money(r.quote)}</td></tr>`).join(''):`<tr><td colspan="18" class="c" style="height:90px;color:#8a97a2">조회된 발주가 없습니다. 제번·기간 조건을 지우고 [⌕ 조회]를 다시 눌러보세요.</td></tr>`;
-sumQty.textContent=money(view.reduce((a,r)=>a+(r.qty||0),0));sumQuote.textContent=money(view.reduce((a,r)=>a+(r.quote||0),0));countText.textContent=`${view.length}건`}
+function render(){selIdx=-1;body.innerHTML=view.length?view.map((r,i)=>`<tr onclick="sel(this,${i})"><td class="c"><input type="checkbox" data-no="${r.no}" ${CHK.has(Number(r.no))?'checked':''} onclick="event.stopPropagation();toggleChk(${Number(r.no)},this.checked)"></td><td class="c">${i+1}</td><td class="c"><span class="tag t-${ST(r.st)}">${ST(r.st)}</span></td><td>${r.vendor}</td><td>${r.job}</td><td>${r.item}</td><td class="c">${r.proc}</td><td class="c">${r.procName}</td><td>${r.part}</td><td>${r.partName}</td><td class="c">${r.mat}</td><td>${r.spec}</td><td class="r">${r.qty}</td><td class="r">${money(r.price)}</td><td class="c">${r.odate}</td><td class="c">${r.rdate}</td><td class="c">${r.idate}</td><td class="c">${r.cdate}</td><td class="r">${money(r.quote)}</td></tr>`).join(''):`<tr><td colspan="18" class="c" style="height:90px;color:#8a97a2">조회된 발주가 없습니다. 제번·기간 조건을 지우고 [⌕ 조회]를 다시 눌러보세요.</td></tr>`;
+sumQty.textContent=money(view.reduce((a,r)=>a+(r.qty||0),0));sumQuote.textContent=money(view.reduce((a,r)=>a+(r.quote||0),0));updCount()}
 function sel(tr,i){document.querySelectorAll('#body tr').forEach(x=>x.classList.remove('sel'));tr.classList.add('sel');selIdx=(i==null?-1:Number(i))}
+/* ── v137: 행 선택 + [입고확정취소] — 확정된 발주를 「입고」 상태로 되돌린다 ───── */
+const CHK=new Set();
+function toggleChk(no,on){on?CHK.add(Number(no)):CHK.delete(Number(no));syncChkAll();updCount()}
+function checkAll(on){view.forEach(r=>{on?CHK.add(Number(r.no)):CHK.delete(Number(r.no))});
+ document.querySelectorAll('#body input[type=checkbox][data-no]').forEach(cb=>{cb.checked=on});syncChkAll();updCount()}
+function syncChkAll(){const el=document.getElementById('chkAll');if(!el)return;
+ const on=view.length>0&&view.every(r=>CHK.has(Number(r.no)));
+ el.checked=on;el.indeterminate=!on&&view.some(r=>CHK.has(Number(r.no)))}
+function updCount(){countText.textContent=`${view.length}건`+(CHK.size?` · 선택 ${CHK.size}`:'')}
+/* 확정취소 — 입고확정일·확정가를 지우고 상태를 「입고」로 되돌린다 (DB 즉시 반영) */
+async function cancelConfirm(){
+ const sel=view.filter(r=>CHK.has(Number(r.no)));
+ if(!sel.length)return msg('입고확정취소할 행을 체크하세요.');
+ const t=sel.filter(r=>ST(r.st)==='입고확정'||r.cdate);
+ if(!t.length)return msg('체크한 행 중 입고확정된 건이 없습니다.');
+ if(!online())return msg('DB 미연결 상태에서는 확정취소할 수 없습니다.');
+ const list=[...new Set(t.map(r=>`${r.job} ${r.part||''} ${r.partName||''}`))].slice(0,8).join('\n · ');
+ if(!confirm(`입고확정 ${t.length}건을 취소합니다.\n\n · ${list}${t.length>8?'\n … 외 '+(t.length-8)+'건':''}\n\n`
+   +`입고확정일과 확정가가 지워지고 「입고」 상태로 돌아갑니다. 계속할까요?`))return;
+ let ok=0,ng=0,last='';
+ for(const r of t){
+  msg(`확정취소 중… ${ok+ng+1}/${t.length}`);
+  try{await MESDB.table('order_lines').upsert({line_id:Number(r.no),status:'입고',confirm_date:null,confirm_price:null},'line_id');ok++;CHK.delete(Number(r.no))}
+  catch(e){ng++;last=String(e.message||e)}
+ }
+ try{MESDB.notify&&MESDB.notify(['order_lines'])}catch(e){}
+ try{MESDB.dropCache&&MESDB.dropCache('order_lines')}catch(e){}
+ if(MESDB.reloadLines)await MESDB.reloadLines();
+ _filterNow();
+ msg(ng?`확정취소 — 성공 ${ok}건 · 실패 ${ng}건: ${last.slice(0,100)}`:`입고확정 ${ok}건을 취소했습니다. (「입고」 상태로 복귀)`);
+}
 /* v117: [⌕ 조회] 는 화면에 남아 있는 자료만 거르지 않고 DB 를 다시 읽는다.
    (다른 탭에서 발주한 건이 이 화면에 뜨지 않던 문제 — 외주가공발주현황과 동일한 방식) */
 function search(){
