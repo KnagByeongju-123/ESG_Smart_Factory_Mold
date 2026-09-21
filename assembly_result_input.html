@@ -28,13 +28,13 @@
     <div class="opts"><label><input type="radio" name="done" value="미완료" checked onchange="search()"> 미완료</label><label><input type="radio" name="done" value="완료" onchange="search()"> 완료</label></div>
   </div>
   <section class="filters">
-    <span class="label">제 번</span><input id="jobQ" class="field" style="width:230px">
-    <span class="label">품 명</span><input id="itemQ" class="field" style="width:230px">
+    <span class="label">제 번</span><input id="jobQ" class="field" style="width:230px" placeholder="제번 입력/선택" autocomplete="off">
+    <span class="label">품 번</span><input id="pnQ" class="field" style="width:230px" placeholder="품번 입력/선택" list="pnDL" autocomplete="off"><datalist id="pnDL"></datalist>
     <button class="btn" onclick="search()">⌕ 조회</button>
   </section>
   <div class="jobbox"><div class="box-title">제번리스트</div><div class="tablewrap"><table>
     <colgroup><col style="width:16%"><col style="width:24%"><col style="width:16%"><col style="width:16%"><col style="width:16%"><col style="width:12%"></colgroup>
-    <thead><tr><th>제번</th><th>품명</th><th>조립완료예정일</th><th>T/O 예정일</th><th>고객요구일</th><th>검사횟수</th></tr></thead>
+    <thead><tr><th>제번</th><th>품번</th><th>조립완료예정일</th><th>T/O 예정일</th><th>고객요구일</th><th>검사횟수</th></tr></thead>
     <tbody id="jobBody"></tbody></table></div></div>
   <section class="bottom">
     <div class="box"><div class="box-title">세부공정 리스트</div><div class="tablewrap"><table>
@@ -81,15 +81,49 @@ function curJob(){
  const t=(jobQ.value||'').trim();
  return t?{job:t,item:'',insp:0}:null;
 }
-function renderJobs(){jobBody.innerHTML=jobView.map((j,i)=>`<tr class="${i===jobIdx?'sel':''}" onclick="pickJob(${i})"><td>${j.job}</td><td>${j.item}</td><td class="c">${j.due}</td><td class="c">${j.s1}</td><td class="c">${j.cust}</td><td class="r">${j.insp??''}</td></tr>`).join('');countText.textContent=`제번 ${jobView.length}건`}
+function renderJobs(){jobBody.innerHTML=jobView.map((j,i)=>`<tr class="${i===jobIdx?'sel':''}" onclick="pickJob(${i})"><td>${j.job}</td><td>${j.model||''}</td><td class="c">${j.due}</td><td class="c">${j.s1}</td><td class="c">${j.cust}</td><td class="r">${j.insp??''}</td></tr>`).join('');countText.textContent=`제번 ${jobView.length}건`}
 function renderSteps(){if(!STEPS.length){procBody.innerHTML='<tr><td colspan="6" class="c" style="color:#8b98a4">세부공정이 없습니다. 아래에서 공정을 고르고 [＋ 세부공정 추가]를 누르세요.</td></tr>';return}
 procBody.innerHTML=STEPS.map((s,i)=>`<tr class="${i===stepIdx?'sel':''}" onclick="pickStep(${i})"><td class="c">${i===stepIdx?'▶':''}</td><td class="c">${s.done?'완료':''}</td><td class="c">${s.mp}</td><td>${s.mpName}</td><td class="r">${s.min??''}</td><td class="r">${s.rate==null?'':s.rate+'%'}</td></tr>`).join('')}
 function renderResults(){const list=RESULTS[key()]||[];resultBody.innerHTML=list.length?list.map((r,i)=>`<tr onclick="selResult(${i})" class="${r._sel?'sel':''}"><td>${r.worker}</td><td class="c">${r.date}</td><td class="r">${r.min}</td></tr>`).join(''):'<tr><td colspan="3" class="c" style="color:#8b98a4">실적 없음</td></tr>'}
-function pickJob(i){jobIdx=i;if(typeof loadSteps==='function')setTimeout(loadSteps,0);stepIdx=0;renderJobs();renderSteps();renderResults();msg(`${jobView[i].job} 세부공정을 조회했습니다.`)}
+function pickJob(i){jobIdx=i;const _j=jobView[i];if(_j){try{jobQ.value=_j.job;pnQ.value=_j.model||''}catch(e){}}if(typeof loadSteps==='function')setTimeout(loadSteps,0);stepIdx=0;renderJobs();renderSteps();renderResults();msg(`${jobView[i].job} 세부공정을 조회했습니다.`)}
 function pickStep(i){stepIdx=i;renderSteps();renderResults();msg(`세부공정 ${STEPS[i].mp} (${STEPS[i].mpName}) 선택`)}
 function selResult(i){const list=RESULTS[key()]||[];list.forEach((r,k)=>r._sel=(k===i));renderResults()}
-function search(){const j=jobQ.value.trim().toLowerCase(),it=itemQ.value.trim().toLowerCase(),m=document.querySelector('input[name=done]:checked').value;
-jobView=JOBS.filter(x=>(m==='완료'?x.done:!x.done)&&(!j||x.job.toLowerCase().includes(j))&&(!it||(x.item||'').toLowerCase().includes(it)));jobIdx=0;renderJobs();renderSteps();renderResults();msg(`${m} 기준 제번 ${jobView.length}건을 조회했습니다.`)}
+
+/* ── v120: 품번(수주등록의 품번 = job_pool.model)으로도 제번을 찾는다 ───── */
+const PNMAP=new Map();            /* job_no → 품번 */
+function pnFillDL(){
+ const dl=document.getElementById('pnDL');if(!dl)return;
+ const seen=new Set(),out=[];
+ JOBS.forEach(j=>{const m=(j.model||'').trim();if(!m||seen.has(m))return;seen.add(m);out.push({m,job:j.job})});
+ out.sort((a,b)=>a.m.localeCompare(b.m));
+ dl.innerHTML=out.map(o=>`<option value="${String(o.m).replace(/"/g,'')}">${String(o.job).replace(/</g,'')}</option>`).join('');
+}
+async function pnLoad(){
+ try{
+  if(!online())return;
+  const rs=await MESDB.table('job_pool').select('select=job_no,model');
+  PNMAP.clear();(rs||[]).forEach(r=>{const m=String(r.model||'').trim();if(m)PNMAP.set(r.job_no,m)});
+  JOBS.forEach(j=>{j.model=PNMAP.get(j.job)||''});
+  pnFillDL();
+ }catch(e){}
+}
+/* 품번을 고르거나 입력하면 → 그 제번을 선택한다 */
+function pnPick(){
+ const v=String(pnQ.value||'').trim();if(!v){search();return}
+ const low=v.toLowerCase();
+ let hit=JOBS.filter(x=>String(x.model||'').toLowerCase()===low);
+ if(!hit.length)hit=JOBS.filter(x=>String(x.model||'').toLowerCase().includes(low));
+ if(!hit.length){msg(`품번 ${v} 로 등록된 제번이 없습니다.`);search();return}
+ const jobs=[...new Set(hit.map(x=>x.job))];
+ if(jobs.length>1){jobQ.value='';search();msg(`품번 ${v} 에 제번이 ${jobs.length}건 있습니다 — ${jobs.slice(0,6).join(', ')}${jobs.length>6?' …':''} · 목록에서 고르세요.`);return}
+ jobQ.value=jobs[0];search();
+ const i=jobView.findIndex(x=>x.job===jobs[0]);
+ if(i>=0)pickJob(i);else msg(`품번 ${v} → 제번 ${jobs[0]} (완료/미완료 구분을 바꿔 보세요)`);
+}
+/* 제번을 고르면 → 품번 칸을 같이 채운다 */
+function pnSync(job){pnQ.value=PNMAP.get(job)||''}
+function search(){const j=jobQ.value.trim().toLowerCase(),pn=pnQ.value.trim().toLowerCase(),m=document.querySelector('input[name=done]:checked').value;
+jobView=JOBS.filter(x=>(m==='완료'?x.done:!x.done)&&(!j||x.job.toLowerCase().includes(j))&&(!pn||(x.model||'').toLowerCase().includes(pn)));jobIdx=0;renderJobs();renderSteps();renderResults();msg(`${m} 기준 제번 ${jobView.length}건을 조회했습니다.`)}
 /* v31: 화면 메모리 → design_results(work_type='조립') / assembly_* 테이블 실연동 */
 const online=()=>!!(window.MESDB&&MESDB.online);
 async function waitDB(){for(let i=0;i<60&&!window.MESDB;i++)await new Promise(r=>setTimeout(r,50));
@@ -100,9 +134,10 @@ async function loadJobs(){
  try{
   const rs=await MESDB.table('assembly_job_pool').select('select=*&order=row_no');
   JOBS.length=0;
-  rs.forEach(r=>JOBS.push({job:r.job_no,item:r.item_name||'',due:r.completion_date||'',
+  rs.forEach(r=>JOBS.push({job:r.job_no,item:r.item_name||'',model:'',due:r.completion_date||'',
     s1:r.s1_date||'',cust:r.customer_request_date||'',insp:Number(r.inspection_count||0),
     done:!!r.assembly_completed}));
+  await pnLoad();          /* v120: 수주등록의 품번(job_pool.model) 을 붙인다 */
   search();
   msg(`조립 대상 제번 ${JOBS.length}건 (완료 ${JOBS.filter(j=>j.done).length})`);
   await loadSteps();
@@ -286,6 +321,12 @@ async function loadWorkers(){
  /* 기준정보에서 사용자정보가 바뀌면 목록을 다시 읽는다 */
  try{MESDB.onChange&&MESDB.onChange(['users'],()=>loadWorkers())}catch(e){}
 })();
+</script>
+<script src="mes_jobpick.js?v=120"></script>
+<script>/* v120: 제번은 목록에서 고르거나 직접 입력 · 품번으로도 찾기 */
+try{MESJOB.attach("jobQ",{onPick:j=>{try{pnSync(j);search();const i=jobView.findIndex(x=>x.job===j);if(i>=0)pickJob(i)}catch(e){}}})}catch(e){}
+try{pnQ.addEventListener("change",()=>{try{pnPick()}catch(e){}});
+ pnQ.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();try{pnPick()}catch(_){}}});}catch(e){}
 </script>
 </body>
 </html>
