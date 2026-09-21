@@ -314,15 +314,22 @@ async function loadJobs(){
   await loadRoutes();
  }catch(e){msg('제번리스트 조회 실패: '+String(e.message||e).slice(0,110))}
 }
+/* v127: 조회가 겹쳐도 부품이 여러 번 쌓이지 않게 한다.
+   (제번을 고르면 목록 선택·콤보 이벤트로 이 함수가 동시에 여러 번 돌면서
+    같은 부품이 2~3행으로 보이던 문제 — 결과는 지역 배열에 담고 마지막 호출만 반영) */
+let _routeSeq=0;
 async function loadRoutes(){
+ const my=++_routeSeq;
  const j=jobView[jobIdx];ROUTES.length=0;
  if(!j||!_online()){renderRoutes();return}
+ const out=[];
  try{
   /* 1순위: 가공계획에서 확정된 부품별 공정 */
   let rs=await MESDB.table('machining_plan_parts')
     .select(`select=*&job_no=eq.${encodeURIComponent(j.job)}&order=row_no`);
+  if(my!==_routeSeq)return;                 /* 더 최근 조회가 시작됐으면 이번 결과는 버린다 */
   if(rs.length){
-   rs.forEach(r=>ROUTES.push({part:r.part_no,name:r.part_name||'',jo:joNum(r.process_code),
+   rs.forEach(r=>out.push({part:r.part_no,name:r.part_name||'',jo:joNum(r.process_code),
      qty:(r.qty!=null?Number(r.qty):1),   /* v115: 가공계획의 부품 수량 = 외주가공 발주 기본 수량 */
      steps:(Array.isArray(r.steps)?r.steps:[]).map(stepCode).filter(Boolean).slice(0,MAXSTEP)}));
   }else{
@@ -330,12 +337,18 @@ async function loadRoutes(){
    const [pm,std]=await Promise.all([
      MESDB.table('partlist_materials').select(`select=part_no,part_name,process_code,qty&job_no=eq.${encodeURIComponent(j.job)}&order=row_no`),
      MESDB.table('machining_standard_routes').select('select=*&order=standard_process_no&limit=1')]);
+   if(my!==_routeSeq)return;
    const steps=(std&&std[0]&&Array.isArray(std[0].steps))?std[0].steps:[];
-   pm.forEach(r=>ROUTES.push({part:r.part_no,name:r.part_name||'',jo:joNum(r.process_code),
+   pm.forEach(r=>out.push({part:r.part_no,name:r.part_name||'',jo:joNum(r.process_code),
      qty:(r.qty!=null?Number(r.qty):1),steps:steps.map(stepCode).filter(Boolean).slice(0,MAXSTEP)}));
    if(pm.length&&!steps.length)msg('기준공정(가공 기준공정관리)이 없어 공정이 비어 있습니다.');
   }
+  /* 같은 부품코드가 겹쳐 들어오면 한 행으로 (조가 다르면 따로 둔다) */
+  const seen=new Set();
+  ROUTES.length=0;
+  for(const r of out){const k=(r.jo??'')+'|'+r.part;if(seen.has(k))continue;seen.add(k);ROUTES.push(r)}
   await loadOrdered(j.job);
+  if(my!==_routeSeq)return;
   renderRoutes();
   PICK.clear();
   const _w=ROUTES.filter(r=>nextStep(r)===-2).length,_d=ROUTES.filter(r=>(r.steps||[]).length&&nextStep(r)===-1).length;
@@ -643,8 +656,8 @@ function sampleFill(){
 <script src="mes_jobpick.js?v=121"></script>
 <script>/* v121: 제번·품번 — 목록에서 고르거나 직접 입력 (둘 다) */
 try{MESJOB.attach("jobQ",{onPick:()=>{try{jobPick()}catch(e){}}})}catch(e){}
-try{jobQ.addEventListener("change",()=>{try{jobPick()}catch(e){}});
- pnQ.addEventListener("change",()=>{try{pnPick()}catch(e){}});
+/* v127: 제번 change 는 MESJOB.attach 가 처리한다 (중복 호출 방지) */
+try{pnQ.addEventListener("change",()=>{try{pnPick()}catch(e){}});
  [jobQ,pnQ].forEach(el=>el.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();el.blur()}}));}catch(e){}
 </script>
 </body>
