@@ -159,15 +159,36 @@ function setOrd(no,v){const r=REQ.find(x=>x.no===no);if(!r)return;
 function setBuy(no,v){const r=REQ.find(x=>x.no===no);if(!r)return;
  r.buyPrice=Number(String(v).replace(/[^0-9.-]/g,''))||0;r.price=r.buyPrice;calcAmt(r);renderReq();
  msg(`${r.part} 매입단가 ${money(r.buyPrice)}원 · 매입금액 ${money(r.amount)}원`)}
-function pickJob(i){jobIdx=i;renderJobs();renderBom();if(typeof loadBom==='function')loadBom();msg(`${jobView[i].job} / 공정 ${jobView[i].proc} 자재표를 조회했습니다.`)}
+function pickJob(i){jobIdx=i;const _j=jobView[i];if(_j){try{jobQ.value=_j.job;modelQ.value=_j.model||''}catch(e){}}renderJobs();renderBom();if(typeof loadBom==='function')loadBom();msg(`${jobView[i].job} / 공정 ${jobView[i].proc} 자재표를 조회했습니다.`)}
 function pickVendor(i){const v=venView[i];if(v==null)return;
  venIdx=(venIdx===i)?-1:i;renderVendors();
  msg(venIdx<0?'협력업체 선택 없음':`협력업체 ${v} 선택`)}
-/* v117: 모델 드롭다운 — 타이핑·선택 병행 (datalist) */
+/* v117: 제번 ↔ 모델 연동 + 드롭다운(타이핑 병행) */
 function fillModelDL(){const dl=document.getElementById('modelDL');if(!dl)return;
- const ms=[...new Set(JOBS.map(x=>(x.model||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
- dl.innerHTML=ms.map(m=>`<option value="${String(m).replace(/"/g,'')}">`).join('')}
-function search(){const j=jobQ.value.trim().toLowerCase(),md=modelQ.value.trim().toLowerCase();jobView=JOBS.filter(x=>(!j||x.job.toLowerCase().includes(j))&&(!md||(x.model||'').toLowerCase().includes(md)));jobIdx=0;renderJobs();renderBom();renderReq();msg(`제번 ${jobView.length}건을 조회했습니다.`+(REQ.length?` · 구매요청 리스트에 ${REQ.length}건이 남아 있습니다.`:''))}
+ const seen=new Set(),out=[];
+ JOBS.forEach(x=>{const m=(x.model||'').trim();if(!m||seen.has(m))return;seen.add(m);out.push({m,job:x.job})});
+ out.sort((a,b)=>a.m.localeCompare(b.m));
+ dl.innerHTML=out.map(o=>`<option value="${String(o.m).replace(/"/g,'')}">${String(o.job).replace(/</g,'')}</option>`).join('')}
+function jobExact(no){no=String(no||'').trim().toLowerCase();if(!no)return null;return JOBS.find(x=>String(x.job).toLowerCase()===no)||null}
+function selectJobRow(no){const i=jobView.findIndex(x=>x.job===no);if(i>=0)pickJob(i)}
+/* 제번을 고르거나 다 입력하면 → 모델 칸을 채우고 그 제번을 선택한다 */
+function onJobPick(){const j=jobExact(jobQ.value);if(j)modelQ.value=j.model||'';applyFilter();if(j)selectJobRow(j.job)}
+/* 모델을 고르면 → 그 모델의 제번을 제번 칸에 넣고 선택한다 (여러 건이면 목록만 걸러 준다) */
+function onModelPick(){const m=String(modelQ.value||'').trim().toLowerCase();
+ if(m){const hit=JOBS.filter(x=>String(x.model||'').toLowerCase()===m);
+  if(hit.length===1){jobQ.value=hit[0].job;applyFilter();selectJobRow(hit[0].job);return}
+  if(hit.length>1)jobQ.value=''}
+ applyFilter()}
+function applyFilter(){const j=jobQ.value.trim().toLowerCase(),md=modelQ.value.trim().toLowerCase();
+ jobView=JOBS.filter(x=>(!j||x.job.toLowerCase().includes(j))&&(!md||(x.model||'').toLowerCase().includes(md)));
+ jobIdx=0;renderJobs();renderBom();renderReq();
+ if(!jobView.length)msg(JOBS.length?'조건에 맞는 제번이 없습니다. 제번·모델 칸을 비우고 다시 조회해 보세요.'
+   :'제번 목록을 불러오지 못했습니다. 잠시 후 [⌕ 조회]를 다시 누르세요.');
+ else msg(`제번 ${jobView.length}건을 조회했습니다.`+(REQ.length?` · 구매요청 리스트에 ${REQ.length}건이 남아 있습니다.`:''));
+ return jobView.length}
+/* [⌕ 조회] — DB에서 제번을 다시 읽은 뒤 거른다 */
+function search(){applyFilter();
+ if(typeof loadJobs==='function'){try{loadJobs(true)}catch(e){}}}
 async function pushDown(){const j=jobView[jobIdx];if(!j)return;const picks=[...bomBody.querySelectorAll('input:checked')].map(x=>j.bom[Number(x.dataset.i)]);if(!picks.length)return msg('자재표에서 발주할 품번을 선택하세요.');const vens=pickedVendors();
  if(!vens.length)return msg('협력업체리스트에서 발주할 업체를 선택하세요.');
  const d=reqDate.value||new Date().toISOString().slice(0,10);
@@ -299,16 +320,21 @@ reqDate.value=new Date().toISOString().slice(0,10);renderJobs();renderVendors();
 const _online=()=>!!(window.MESDB&&MESDB.online);
 async function _waitDB(){for(let i=0;i<60&&!window.MESDB;i++)await new Promise(r=>setTimeout(r,50));
  if(window.MESDB&&MESDB.ready){try{await MESDB.ready}catch(e){}}}
-async function loadJobs(){
- await _waitDB();if(!_online())return;
+async function loadJobs(silent){
+ await _waitDB();
+ /* v117: 연결 직후엔 online 이 아직 false 일 수 있다 — 조금 기다렸다가 다시 본다 (조용히 빠져나가던 문제) */
+ for(let i=0;i<20&&!_online();i++)await new Promise(r=>setTimeout(r,150));
+ if(!_online()){msg('DB에 연결되지 않아 제번을 불러오지 못했습니다. 잠시 후 [⌕ 조회]를 다시 누르세요.');return -1}
  try{
-  const rs=await MESDB.table('job_pool').select('select=*&order=row_no');
-  const seen=new Set(JOBS.map(j=>j.job));
+  const rs=await MESDB.table('job_pool').select('select=*&order=row_no',{fresh:true});
+  const seen=new Map(JOBS.map(j=>[j.job,j]));
+  rs.forEach(r=>{const ex=seen.get(r.job_no);if(ex){ex.model=r.model||ex.model||'';ex.item=r.item_name||ex.item||''}});
   rs.forEach(r=>{if(!seen.has(r.job_no))JOBS.push({job:r.job_no,item:r.item_name||'',model:r.model||'',proc:'1',procName:'1/'+Math.max(1,Math.trunc(Number(r.set_qty))||1),setQty:Math.max(1,Math.trunc(Number(r.set_qty))||1),bom:[]})});
   fillModelDL();
-  if(typeof search==='function')search();else{jobView=[...JOBS];renderJobs()}
+  applyFilter();
   await loadBom();
- }catch(e){}
+  return JOBS.length;
+ }catch(e){msg('제번 조회 실패: '+String(e.message||e).slice(0,120));return -1}
 }
 async function loadBom(){
  const j=jobView[jobIdx];if(!j||!_online())return;
@@ -438,7 +464,13 @@ async function reAdd(){const j=jobView[jobIdx];if(!j)return;
 </script>
 <script src="mes_jobpick.js?v=117"></script>
 <script>/* v117: 제번 칸 — 등록된 제번 목록에서 고르거나 직접 타이핑 (둘 다 가능) */
-try{MESJOB.attach("jobQ",{onPick:()=>{try{search()}catch(e){}}})}catch(e){}
+try{MESJOB.attach("jobQ",{onPick:()=>{try{onJobPick()}catch(e){}}})}catch(e){}
+</script>
+<script>/* v117: 제번 ↔ 모델 양방향 연동 (고르거나 쳐 넣거나 둘 다) */
+["change","input"].forEach(ev=>{
+ jobQ.addEventListener(ev,()=>{try{onJobPick()}catch(e){}});
+ modelQ.addEventListener(ev,()=>{try{onModelPick()}catch(e){}});
+});
 </script>
 </body>
 </html>
