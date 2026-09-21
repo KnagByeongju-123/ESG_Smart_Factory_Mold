@@ -58,10 +58,22 @@ let selIdx=-1;
 const ST=v=>v==='대기'?'발주':v==='확정'?'입고확정':(v||'');
 const online=()=>!!(window.MESDB&&MESDB.online);
 function within(v,a,b){if(!a&&!b)return true;if(!v)return false;return (!a||v>=a)&&(!b||v<=b)}
-function render(){selIdx=-1;body.innerHTML=view.map((r,i)=>`<tr onclick="sel(this,${i})"><td class="c">${i+1}</td><td class="c"><span class="tag t-${ST(r.st)}">${ST(r.st)}</span></td><td>${r.vendor}</td><td>${r.job}</td><td>${r.item}</td><td class="c">${r.proc}</td><td class="c">${r.procName}</td><td>${r.part}</td><td>${r.partName}</td><td class="c">${r.mat}</td><td>${r.spec}</td><td class="r">${r.qty}</td><td class="r">${money(r.price)}</td><td class="c">${r.odate}</td><td class="c">${r.rdate}</td><td class="c">${r.idate}</td><td class="c">${r.cdate}</td><td class="r">${money(r.quote)}</td></tr>`).join('');
+function render(){selIdx=-1;body.innerHTML=view.length?view.map((r,i)=>`<tr onclick="sel(this,${i})"><td class="c">${i+1}</td><td class="c"><span class="tag t-${ST(r.st)}">${ST(r.st)}</span></td><td>${r.vendor}</td><td>${r.job}</td><td>${r.item}</td><td class="c">${r.proc}</td><td class="c">${r.procName}</td><td>${r.part}</td><td>${r.partName}</td><td class="c">${r.mat}</td><td>${r.spec}</td><td class="r">${r.qty}</td><td class="r">${money(r.price)}</td><td class="c">${r.odate}</td><td class="c">${r.rdate}</td><td class="c">${r.idate}</td><td class="c">${r.cdate}</td><td class="r">${money(r.quote)}</td></tr>`).join(''):`<tr><td colspan="18" class="c" style="height:90px;color:#8a97a2">조회된 발주가 없습니다. 제번·기간 조건을 지우고 [⌕ 조회]를 다시 눌러보세요.</td></tr>`;
 sumQty.textContent=money(view.reduce((a,r)=>a+(r.qty||0),0));sumQuote.textContent=money(view.reduce((a,r)=>a+(r.quote||0),0));countText.textContent=`${view.length}건`}
 function sel(tr,i){document.querySelectorAll('#body tr').forEach(x=>x.classList.remove('sel'));tr.classList.add('sel');selIdx=(i==null?-1:Number(i))}
-function search(){const st=document.querySelector('input[name=st]:checked').value;const j=jobQ.value.trim().toLowerCase(),it=itemQ.value.trim().toLowerCase(),v=vendorQ.value.trim().toLowerCase();
+/* v117: [⌕ 조회] 는 화면에 남아 있는 자료만 거르지 않고 DB 를 다시 읽는다.
+   (다른 탭에서 발주한 건이 이 화면에 뜨지 않던 문제 — 외주가공발주현황과 동일한 방식) */
+function search(){
+ if(window.MESDB&&MESDB.reloadLines){
+  msg('DB 에서 다시 읽는 중…');
+  MESDB.reloadLines().then(n=>{_filterNow();
+   if(n===-1)msg('DB 에서 읽지 못했습니다. 연결 상태를 확인하고 [⌕ 조회]를 다시 누르세요. (기준정보 › 에러로그에 사유가 남습니다)')})
+   .catch(()=>{_filterNow();msg('DB 조회 실패 — 화면에 남아 있는 자료만 표시했습니다.')});
+  return;
+ }
+ _filterNow();
+}
+function _filterNow(){const st=document.querySelector('input[name=st]:checked').value;const j=jobQ.value.trim().toLowerCase(),it=itemQ.value.trim().toLowerCase(),v=vendorQ.value.trim().toLowerCase();
 view=rows.filter(r=>(st==='전체'||ST(r.st)===st)&&(!j||r.job.toLowerCase().includes(j))&&(!it||(r.item||'').toLowerCase().includes(it))&&(!v||r.vendor.toLowerCase().includes(v))&&within(r.rdate,rd1.value,rd2.value)&&within(r.idate,id1.value,id2.value)&&within(r.cdate,cd1.value,cd2.value));
 render();msg(`${st} 기준 ${view.length}건을 조회했습니다.`)}
 function exportCsv(){const out=[['구분','업체명','제번','품명','공정','공정명','품번','부품명','재질','스펙','수량','단가','발주월','입고요구일','입고월','입고확정일','견적가'],...view.map(r=>[ST(r.st),r.vendor,r.job,r.item,r.proc,r.procName,r.part,r.partName,r.mat,r.spec,r.qty,r.price,r.odate,r.rdate,r.idate,r.cdate,r.quote])];const csv='\ufeff'+out.map(a=>a.map(v=>'"'+String(v??'').replaceAll('"','""')+'"').join(',')).join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download='purchase_order_status.csv';a.click();URL.revokeObjectURL(a.href);msg('EXCEL(CSV) 파일을 생성했습니다.')}
