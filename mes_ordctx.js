@@ -161,10 +161,14 @@ function ensureUI() {
 /* v142: 우클릭으로 발주·입고·확정을 끝내므로 협력업체리스트·요청추가 바·구매요청 리스트를 감추고
    제번리스트·자재표 리스트를 화면 높이만큼 넓힌다 (외주가공 발주 v116 과 같은 배치).
    body.ox-classic 이면 옛 배치(요청 리스트·PRINT 발주서)로 돌아간다 — 코드는 그대로 둔다. */
-body:not(.ox-classic) .panes{grid-template-columns:minmax(300px,.9fr) 2.6fr!important;flex:1 1 auto!important;height:auto!important;min-height:0;padding-bottom:8px!important}
-body:not(.ox-classic) .panes>.box{height:auto!important;min-height:0!important;align-self:stretch!important;flex-grow:1!important}
+body:not(.ox-classic) .panes{grid-template-columns:minmax(280px,.85fr) 2.7fr!important;flex:1 1 auto!important;height:auto!important;min-height:0;padding-bottom:8px!important}
+/* 저장된 배치(ui_layout)가 블록에 직접 박아 둔 width·height 를 무시한다.
+   ─ 제번리스트에 width:518px 이 남아 있어 표가 잘리고, 숨긴 협력업체리스트 자리(460px)까지
+     그대로 차지하면서 자재표가 화면 밖으로 밀려났다. 이 배치는 두 리스트가 창을 꽉 채운다. */
+body:not(.ox-classic) .panes>.box{width:auto!important;max-width:none!important;min-width:0!important;
+ height:auto!important;min-height:0!important;align-self:stretch!important;flex:1 1 auto!important}
 body:not(.ox-classic) .panes>.box:nth-child(3),body:not(.ox-classic) .midbar,body:not(.ox-classic) .reqbox{display:none!important}
-.panes>.box{min-width:0}.panes>.box:nth-child(2) table{min-width:0!important}
+.panes>.box{min-width:0}.panes>.box table{min-width:0!important}
 #oxToggle{margin-left:auto;height:27px;border:1px solid #9ca9b5;background:linear-gradient(#fff,#dfe6eb);font:inherit;white-space:nowrap}
 body.ox-classic #oxToggle{background:linear-gradient(#f9ffff,#d2e7f6);color:#1e5e91;font-weight:700}
 @media(max-width:900px){body:not(.ox-classic) .panes{grid-template-columns:1fr!important}}
