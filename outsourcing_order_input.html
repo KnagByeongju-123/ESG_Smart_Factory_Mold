@@ -64,6 +64,9 @@ tr.rdone td{color:#8b98a3}
    협력업체리스트·요청추가 바·구매요청 리스트를 숨기고 두 리스트를 화면 높이만큼 넓힌다 (코드는 그대로 둠) */
 .panes{grid-template-columns:minmax(260px,.9fr) 2.6fr!important;flex:1 1 auto!important;height:auto!important;min-height:0;padding-bottom:8px!important}
 .panes>.venbox,.reqhide{display:none!important}
+/* v117: 저장된 배치(ui_layout)에 옛 높이가 남아 있어 두 리스트가 창 아래까지 늘어나지 않았다.
+   이 화면은 두 리스트가 창 높이를 꽉 채우는 구조이므로 저장된 높이는 무시한다. */
+.panes>.box{height:auto!important;min-height:0!important;align-self:stretch!important;flex-grow:1!important}
 @media(max-width:900px){.panes{grid-template-columns:1fr!important}}
 </style>
 </head>
