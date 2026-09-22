@@ -35,9 +35,9 @@ tfoot th{position:sticky;bottom:0;background:linear-gradient(#e6eef5,#d3e0ea)}
       <span class="label">입고확정일</span><input id="cd1" class="field" type="date"><span>~</span><input id="cd2" class="field" type="date">
     </div>
     <div class="frow">
-      <span class="label">제 번</span><input id="jobQ" class="field" style="width:180px">
-      <span class="label">품 명</span><input id="itemQ" class="field" style="width:180px">
-      <span class="label">협력업체</span><input id="vendorQ" class="field" style="width:180px">
+      <span class="label">제 번</span><input id="jobQ" class="field" style="width:180px" placeholder="제번 입력/선택" autocomplete="off">
+      <span class="label">품 명</span><input id="itemQ" class="field" style="width:180px" placeholder="품명 입력/선택" list="itemDL" autocomplete="off"><datalist id="itemDL"></datalist>
+      <span class="label">협력업체</span><select id="vendorQ" class="field" data-combo style="width:180px"><option value="">전체</option></select>
       <button class="btn" onclick="search()">⌕ 조회</button>
     </div>
   </section>
@@ -89,7 +89,7 @@ async function cancelConfirm(){
  try{MESDB.notify&&MESDB.notify(['order_lines'])}catch(e){}
  try{MESDB.dropCache&&MESDB.dropCache('order_lines')}catch(e){}
  if(MESDB.reloadLines)await MESDB.reloadLines();
- _filterNow();
+ itemLoad();loadVendorSel();_filterNow();
  msg(ng?`확정취소 — 성공 ${ok}건 · 실패 ${ng}건: ${last.slice(0,100)}`:`입고확정 ${ok}건을 취소했습니다. (「입고」 상태로 복귀)`);
 }
 /* v117: [⌕ 조회] 는 화면에 남아 있는 자료만 거르지 않고 DB 를 다시 읽는다.
@@ -97,7 +97,7 @@ async function cancelConfirm(){
 function search(){
  if(window.MESDB&&MESDB.reloadLines){
   msg('DB 에서 다시 읽는 중…');
-  MESDB.reloadLines().then(n=>{_filterNow();
+  MESDB.reloadLines().then(n=>{itemLoad();loadVendorSel();_filterNow();
    if(n===-1)msg('DB 에서 읽지 못했습니다. 연결 상태를 확인하고 [⌕ 조회]를 다시 누르세요. (기준정보 › 에러로그에 사유가 남습니다)')})
    .catch(()=>{_filterNow();msg('DB 조회 실패 — 화면에 남아 있는 자료만 표시했습니다.')});
   return;
@@ -128,10 +128,59 @@ async function cancelOrder(){
  }
 }
 function msg(t){message.textContent=t}
+/* ── v150: 제번·품명·협력업체 — 목록에서 고르거나 직접 입력 (외주가공 발주현황과 동일) ──
+   품명 목록은 조회된 발주자료의 제번↔품명으로 만든다. 제번을 고르면 품명이, 품명을 고르면 제번이 따라온다. */
+const ITEMMAP=new Map();
+function IT(job){return ITEMMAP.get(job)||''}
+function itemLoad(){
+ rows.forEach(r=>{if(r.job&&r.item&&!ITEMMAP.has(r.job))ITEMMAP.set(r.job,r.item)});
+ const dl=document.getElementById('itemDL');if(!dl)return;
+ const seen=new Set(),out=[];
+ rows.forEach(r=>{const m=(r.item||'').trim();if(!m||seen.has(m))return;seen.add(m);out.push({m,job:r.job||''})});
+ out.sort((a,b)=>a.m.localeCompare(b.m,'ko'));
+ dl.innerHTML=out.map(o=>`<option value="${String(o.m).replace(/"/g,'')}">${String(o.job).replace(/</g,'')}</option>`).join('');
+}
+function jobPick(){const m=IT(String(jobQ.value||'').trim());if(m)itemQ.value=m;_filterNow()}
+function itemPick(){
+ const v=String(itemQ.value||'').trim();
+ if(v){const jobs=[...ITEMMAP.entries()].filter(([,m])=>m.toLowerCase()===v.toLowerCase()).map(([j])=>j);
+  if(jobs.length===1)jobQ.value=jobs[0];else if(jobs.length>1)jobQ.value='';}
+ _filterNow();
+}
+/* 협력업체 — 기준정보(업체 관리) 목록, 비어 있으면 조회된 발주자료의 업체로 대체 */
+async function loadVendorSel(){
+ const sel=document.getElementById('vendorQ');if(!sel||sel.tagName!=='SELECT')return;
+ const keep=sel.value;let n=0;
+ try{
+  for(let i=0;i<40&&!window.MESLOOK;i++)await new Promise(r=>setTimeout(r,50));
+  if(window.MESLOOK){
+   await MESLOOK.fillSelect(sel,'vendor_purchase',{keep:['전체'],value:r=>r.vendor_name||'',label:r=>r.vendor_name||''});
+   n=sel.options.length-1;
+  }
+ }catch(e){}
+ if(n<=0){
+  const vs=[...new Set(rows.map(r=>r.vendor).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ko'));
+  sel.innerHTML='<option value="">전체</option>'+vs.map(v=>`<option>${String(v).replace(/[<>&"]/g,'')}</option>`).join('');
+  n=vs.length;
+ }
+ if([...sel.options].some(o=>o.value===keep))sel.value=keep;
+ if(!sel.__vwire){sel.__vwire=1;sel.addEventListener('change',()=>{try{_filterNow()}catch(e){}})}
+}
 render();window.MES={search,exportCsv,cancelOrder,setMessage:msg};
 </script>
 <script src="mes_db.js?v=67"></script>
 <script>MESDB.lines({page:"purchase_order_status",category:"구매품",statuses:[],map:{"no": {"col": "line_id", "type": "num"}, "vendor": "vendor_name", "job": "job_no", "item": "item_name", "proc": "process_code", "procName": "process_name", "part": "part_no", "partName": "part_name", "st": {"col": "status", "type": "status"}, "mat": "material", "spec": "spec", "qty": {"col": "order_qty", "type": "num"}, "price": {"col": "unit_price", "type": "num"}, "odate": {"col": "order_date", "type": "date"}, "rdate": {"col": "required_date", "type": "date"}, "idate": {"col": "receipt_date", "type": "date"}, "cdate": {"col": "confirm_date", "type": "date"}, "quote": {"col": "quote_price", "type": "num"}},get:()=>rows,render:()=>{view=[...rows];render()}});</script>
-<script src="mes_ctx.js?v=67"></script>
+<script src="mes_ctx.js?v=150"></script>
+<script src="mes_lookup.js?v=150"></script>
+<script src="mes_jobpick.js?v=150"></script>
+<script>/* v150: 제번은 등록된 수주 목록에서 고르거나 직접 입력 */
+try{MESJOB.attach("jobQ",{onPick:()=>{try{jobPick()}catch(e){}}})}catch(e){}
+try{
+ jobQ.addEventListener("change",()=>{try{jobPick()}catch(e){}});
+ itemQ.addEventListener("change",()=>{try{itemPick()}catch(e){}});
+ [jobQ,itemQ].forEach(el=>el.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();el.blur()}}));
+}catch(e){}
+itemLoad();loadVendorSel();setTimeout(()=>{itemLoad();loadVendorSel()},1500);
+</script>
 </body>
 </html>
