@@ -43,7 +43,7 @@ st.textContent = `
 #ctxPop .rt .stt{display:inline-block;padding:0 5px;border-radius:7px;font-size:10px;color:#fff;background:#8b98a3}
 #ctxPop .rt .stt.s-out{background:#e07a1f}#ctxPop .rt .stt.s-in{background:#2f6fb5}#ctxPop .rt .stt.s-req{background:#8e6bb0}
 #ctxPop .rbar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:4px 0 2px}
-#ctxPop .rbar select{height:25px;border:1px solid #b9c3cb;font:inherit;background:#fff;min-width:200px;flex:1}
+#ctxPop .rbar select,#ctxPop .rbar input{height:25px;border:1px solid #b9c3cb;font:inherit;background:#fff;min-width:200px;flex:1;padding:0 5px;color:#22303a;box-sizing:border-box}
 #ctxPop .rbar .btn{height:25px;min-width:0;padding:0 9px}
 #ctxPop .badge{display:inline-block;padding:0 6px;border-radius:8px;font-size:10px;color:#fff;background:#8b98a3;margin-left:6px;vertical-align:1px}
 #ctxPop .badge.ok{background:#2e7d32}#ctxPop .badge.new{background:#e07a1f}
@@ -84,8 +84,8 @@ function open(ev, ri) {
     const stt = house ? '' : stepState(r, i);
     return { code, house, lock: !!stt, st: stt };
   }).filter(x => x.code);
-  E = { ri, r, job: j, steps, stdNo: '' };
-  const cur = STD.find(x => x.name && x.name === r.stdName); if (cur) E.stdNo = String(cur.no);
+  E = { ri, r, job: j, steps, stdNo: '', stdName: r.stdName || '', applied: '' };
+  const cur = STD.find(x => x.name && x.name === r.stdName); if (cur) { E.stdNo = String(cur.no); E.applied = String(cur.no); }
   const pos = ev && ev.clientX != null ? ev : { clientX: 120, clientY: 120 };
   document.getElementById('ctxPop').classList.add('wide');
   ctxOpen(pos, `${r.part} ${r.name || ''} — 공정 편집 (가공계획)`, 'k-cfm', body(), foot());
@@ -97,7 +97,9 @@ function body() {
   const { r, job } = E;
   return `<div class="sub"><b>${esc(job.job || '')}</b> · ${esc(r.part)} ${esc(r.name || '')} · ${esc(String(r.jo || '1'))}조 · 수량 ${Number(r.qty) || 1}` +
     (r.saved ? '<span class="badge ok">가공계획 저장됨</span>' : '<span class="badge new" title="가공계획등록이 안 된 부품 — PartList 부품에 기준공정 1번을 임시로 붙여 보여주고 있습니다. 저장하면 확정됩니다">미저장 · 기본값</span>') + `</div>
-   <div class="rbar"><b>기준공정</b><select id="rtStd"></select><button class="btn" type="button" onclick="MESROUTE.applyStd()" title="고른 기준공정의 공정으로 바꿉니다 (이미 발주된 공정은 그대로 둡니다)">↓ 적용</button></div>
+   <div class="rbar"><b>기준공정</b><input id="rtStd" list="rtStdDL" autocomplete="off" spellcheck="false"
+     placeholder="고르면 바로 적용 · 새 이름을 쳐 넣으면 [기준공정으로 저장]에 쓰입니다"
+     title="목록에서 고르면 그 공정으로 즉시 바뀝니다. 새 이름을 직접 입력하면 다른 이름으로 저장할 수 있습니다."><datalist id="rtStdDL"></datalist></div>
    <table class="rt"><thead><tr><th style="width:48px">순번</th><th>가공공정</th><th style="width:40px" title="사내가공 — 외주 발주 대상에서 빠집니다">사내</th><th style="width:52px">상태</th><th style="width:108px">편집</th></tr></thead>
    <tbody id="rtBody"></tbody></table>
    <div class="note" id="rtNote"></div>`;
@@ -107,11 +109,31 @@ function foot() {
    <button class="btn" type="button" onclick="MESROUTE.saveStd()" title="지금 공정 구성을 기준공정으로 저장합니다 (새로 만들거나 고른 기준공정을 덮어쓰기)">기준공정으로 저장</button>
    <button class="btn" type="button" onclick="ctxClose()">닫기</button>`;
 }
+/* 기준공정 이름 → 등록된 기준공정 찾기 (「2. 기본2」 처럼 번호가 붙어 있어도 찾는다) */
+const stdLabel = s => `${s.no}. ${s.name || autoName(s.steps.map(c => ({ code: c })))}${s.inhouse.some(Boolean) ? ' · 사내 포함' : ''}`;
+function stdFind(txt) {
+  const t = String(txt || '').trim(); if (!t) return null;
+  return STD.find(s => stdLabel(s) === t) || STD.find(s => (s.name || '').trim() === t)
+      || STD.find(s => String(s.no) === t.replace(/\..*$/, '').trim() && /^\d+\s*\./.test(t)) || null;
+}
 function fillStd() {
-  const sel = document.getElementById('rtStd'); if (!sel || !E) return;
-  sel.innerHTML = '<option value="">(기준공정 선택)</option>' + STD.map(s =>
-    `<option value="${s.no}"${String(s.no) === E.stdNo ? ' selected' : ''}>${s.no}. ${esc(s.name || autoName(s.steps.map(c => ({ code: c }))))}${s.inhouse.some(Boolean) ? ' · 사내 포함' : ''}</option>`).join('');
-  sel.onchange = () => { E.stdNo = sel.value; };
+  const el = document.getElementById('rtStd'); if (!el || !E) return;
+  const dl = document.getElementById('rtStdDL');
+  if (dl) dl.innerHTML = STD.map(s => `<option value="${esc(stdLabel(s))}"></option>`).join('');
+  /* 공용 콤보박스(mes_ctx.js 의 mescb)가 붙으면 실제 입력칸은 그 안의 것이다 — 값을 같이 맞춘다 */
+  const box = el.__mescbBox, vis = box ? box.inp : el;
+  if (document.activeElement !== el && document.activeElement !== vis) {
+    const cur = STD.find(s => String(s.no) === String(E.stdNo));
+    const txt = cur ? stdLabel(cur) : (E.stdName || '');
+    el.value = txt; if (vis !== el) vis.value = txt;
+  }
+  /* v149: 목록에서 고르는 즉시 적용 — [적용] 버튼을 없앴다 */
+  el.oninput = el.onchange = () => {
+    const hit = stdFind(el.value);
+    E.stdName = el.value.trim();
+    if (hit && String(hit.no) !== String(E.applied)) { E.stdNo = String(hit.no); applyStd(hit); }
+    else if (!hit) E.stdNo = '';
+  };
 }
 function paint() {
   if (!E) return;
@@ -132,7 +154,7 @@ function paint() {
   const note = document.getElementById('rtNote');
   if (note) note.innerHTML = (locked ? `이미 발주된 ${locked}개 공정은 잠겨 있습니다 (취소하려면 그 칸을 우클릭 → 발주취소). ` : '') +
     (house ? `사내가공 ${house}개는 외주 발주 대상에서 빠지고 순서 판정에서 건너뜁니다. ` : '') +
-    '고친 뒤 <b>[▣ 가공계획 저장]</b>을 눌러야 반영됩니다.';
+    '기준공정을 고르면 <b>바로</b> 바뀝니다. 새 이름을 쳐 넣고 [기준공정으로 저장] 하면 다른 이름으로 저장됩니다. 고친 뒤 <b>[▣ 가공계획 저장]</b>을 눌러야 이 부품에 반영됩니다.';
 }
 
 /* ── 편집 동작 ────────────────────────────────────────────── */
@@ -156,16 +178,17 @@ function del(i) {
   if (E.steps.slice(i + 1).some(x => x.lock)) return say('발주된 공정 앞의 공정은 지울 수 없습니다. (발주 순번이 밀립니다)');
   E.steps.splice(i, 1); paint();
 }
-function applyStd() {
-  if (!E) return; const s = STD.find(x => String(x.no) === String(E.stdNo)); if (!s) return say('기준공정을 고르세요.');
+function applyStd(pick) {
+  if (!E) return; const s = pick || STD.find(x => String(x.no) === String(E.stdNo)); if (!s) return say('기준공정을 고르세요.');
   const locked = E.steps.filter(x => x.lock);
   if (locked.length && !confirm(`발주된 공정 ${locked.length}개는 그대로 두고, 그 뒤를 기준공정 ${s.no}(${s.name})의 공정으로 바꿉니다.\n계속할까요?`)) return;
+  E.applied = String(s.no);
   /* 잠긴 공정은 앞쪽에 그대로, 그 뒤를 기준공정으로 교체 */
   const keep = E.steps.filter(x => x.lock);
   const rest = s.steps.map((c, i) => ({ code: c, house: !!s.inhouse[i], lock: false, st: '' }));
   E.steps = keep.concat(rest).slice(0, MAXN);
-  E.r.stdName = s.name;
-  paint(); say(`기준공정 ${s.no} (${s.name}) 을 적용했습니다 — [▣ 가공계획 저장]으로 확정하세요.`);
+  E.r.stdName = s.name; E.stdName = s.name;
+  paint(); say(`기준공정 ${s.no} (${s.name}) 적용 — ${E.steps.map(x => pn(x.code) + (x.house ? '[사내]' : '')).join(' → ')} · [▣ 가공계획 저장]으로 확정하세요.`);
 }
 
 /* ── 저장 : 가공계획 ─────────────────────────────────────── */
@@ -204,14 +227,23 @@ async function saveStd() {
   if (!E) return; const steps = collect(); if (!steps) return;
   if (!online()) return say('DB 미연결 - 저장할 수 없습니다.');
   await loadStd();
-  const cur = STD.find(x => String(x.no) === String(E.stdNo));
-  let over = false;
-  if (cur) over = confirm(`기준공정 ${cur.no} (${cur.name}) 을 지금 공정 구성으로 덮어쓸까요?\n\n[확인] 덮어쓰기   [취소] 새 기준공정으로 저장`);
-  const defName = over ? cur.name : autoName(steps);
-  const nm = prompt(over ? `기준공정 ${cur.no} 이름` : '새 기준공정 이름', defName);
-  if (nm == null) return;
-  const name = (nm.trim() || defName).slice(0, 80);
-  const id = over ? cur.no : (STD.reduce((m, x) => Math.max(m, x.no), 0) + 1);
+  /* v149: 이름은 위 기준공정 칸에서 그대로 가져온다 (prompt 없음).
+     · 등록된 기준공정 이름 그대로면 → 덮어쓸지 묻는다
+     · 새 이름을 쳐 넣었으면   → 그 이름으로 새 기준공정 저장 (다른 이름으로 저장) */
+  const el = document.getElementById('rtStd');
+  const box = el && el.__mescbBox;
+  const typed = String((box ? box.inp.value : (el && el.value)) || '').trim();
+  const hit = stdFind(typed);
+  let id, name, over = false;
+  if (hit) {
+    over = confirm(`기준공정 ${hit.no} (${hit.name}) 을 지금 공정 구성으로 덮어쓸까요?\n\n[취소] 를 누르면 저장하지 않습니다. 다른 이름으로 저장하려면 기준공정 칸에 새 이름을 쳐 넣으세요.`);
+    if (!over) return say('기준공정 저장을 취소했습니다. 새 이름을 입력하면 다른 기준공정으로 저장됩니다.');
+    id = hit.no; name = hit.name;
+  } else {
+    name = (typed || autoName(steps)).slice(0, 80);
+    if (!name) return say('기준공정 이름을 입력하세요.');
+    id = STD.reduce((m, x) => Math.max(m, x.no), 0) + 1;
+  }
   const codes = steps.map(x => x.code), house = steps.map(x => !!x.house);
   try {
     const today = new Date().toISOString().slice(0, 10);
@@ -222,8 +254,9 @@ async function saveStd() {
     await MESDB.table('machining_standard_routes').upsert({ standard_process_no: id, standard_process_name: name, steps: codes, inhouse: house }, 'standard_process_no');
     try { MESDB.notify && MESDB.notify(['standard_processes', 'standard_process_steps', 'machining_standard_routes']); } catch (e) {}
     try { MESDB.dropCache && MESDB.dropCache('machining_standard_routes'); } catch (e) {}
-    await loadStd(); E.stdNo = String(id); E.r.stdName = name; fillStd();
-    say(`기준공정 ${id} (${name}) ${over ? '덮어쓰기' : '신규 저장'} — 가공계획등록·기준공정관리에도 반영됩니다. 이 부품에 쓰려면 [▣ 가공계획 저장]도 누르세요.`);
+    await loadStd();
+    E.stdNo = String(id); E.applied = String(id); E.stdName = name; E.r.stdName = name; fillStd();
+    say(`기준공정 ${id} (${name}) ${over ? '덮어쓰기' : '새로 저장'} — 기준공정관리에도 반영됩니다. 이 부품에 쓰려면 [▣ 가공계획 저장]도 누르세요.`);
   } catch (e) { say('기준공정 저장 실패: ' + String(e.message || e).slice(0, 140)); }
 }
 

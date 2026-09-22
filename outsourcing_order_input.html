@@ -18,6 +18,17 @@ td.route{user-select:none;text-align:center;font-weight:400;color:#8b98a3;backgr
 td.route .st{display:block;font-size:10px;line-height:13px;border-radius:7px;margin-top:1px;padding:0 4px}
 /* v112: 공용 얼룩무늬 배경(!important)이 상태색을 덮지 않도록 이 셀들도 !important 로 고정 */
 td.route{user-select:none;background:#fff!important}
+/* v149: 공정이 10칸이라 화면보다 넓어진다 — 왼쪽 5칸은 고정해 두고 공정만 가로로 민다 */
+.panes>.box:nth-child(2) .tablewrap{overflow-x:auto}
+.panes>.box:nth-child(2) th:nth-child(-n+5),.panes>.box:nth-child(2) td:nth-child(-n+5){position:sticky;z-index:3;background:#fff}
+.panes>.box:nth-child(2) thead th:nth-child(-n+5){z-index:4;background:linear-gradient(#dbe9f4,#c7d9e8)}
+.panes>.box:nth-child(2) tbody tr:hover td:nth-child(-n+5){background:#edf6fd}
+.panes>.box:nth-child(2) tr.rdone td:nth-child(-n+5){background:#f4f6f8}
+.panes>.box:nth-child(2) th:nth-child(1),.panes>.box:nth-child(2) td:nth-child(1){left:0}
+.panes>.box:nth-child(2) th:nth-child(2),.panes>.box:nth-child(2) td:nth-child(2){left:30px}
+.panes>.box:nth-child(2) th:nth-child(3),.panes>.box:nth-child(2) td:nth-child(3){left:70px}
+.panes>.box:nth-child(2) th:nth-child(4),.panes>.box:nth-child(2) td:nth-child(4){left:162px}
+.panes>.box:nth-child(2) th:nth-child(5),.panes>.box:nth-child(2) td:nth-child(5){left:294px;box-shadow:1px 0 0 #c5ced6}
 td.route.s-next{background:#8fdc6b!important;color:#20461a;font-weight:700;cursor:pointer}
 td.route.s-next .st{background:#2e7d32;color:#fff}
 td.route.s-ext{background:#dff5d3!important;color:#2c5a24;cursor:pointer}
@@ -76,7 +87,8 @@ tr.rdone td{color:#8b98a3}
 .panes>.venbox,.reqhide{display:none!important}
 /* v117: 저장된 배치(ui_layout)에 옛 높이가 남아 있어 두 리스트가 창 아래까지 늘어나지 않았다.
    이 화면은 두 리스트가 창 높이를 꽉 채우는 구조이므로 저장된 높이는 무시한다. */
-.panes>.box{height:auto!important;min-height:0!important;align-self:stretch!important;flex-grow:1!important}
+.panes>.box{height:auto!important;min-height:0!important;align-self:stretch!important;flex-grow:1!important;
+ min-width:0!important}   /* v149: 공정 10칸이라 표가 칸보다 넓어질 수 있다 — 칸이 줄어들고 표 안쪽에서 가로로 밀리게 한다 */
 @media(max-width:900px){.panes{grid-template-columns:1fr!important}}
 </style>
 </head>
@@ -94,9 +106,9 @@ tr.rdone td{color:#8b98a3}
     <div class="box"><div class="box-title">제번리스트</div><div class="tablewrap"><table>
       <colgroup><col style="width:34%"><col style="width:34%"><col style="width:16%"><col style="width:16%"></colgroup>
       <thead><tr><th>제번</th><th>품번</th><th>공정</th><th>공정명</th></tr></thead><tbody id="jobBody"></tbody></table></div></div>
-    <div class="box"><div class="box-title">부품별 가공공정 리스트<span class="legend"><i style="background:#8fdc6b"></i>다음 공정(우클릭=발주)<i style="background:#8e6bb0"></i>요청<i style="background:#e07a1f"></i>출고<i style="background:#2f6fb5"></i>입고<i style="background:#8b98a3"></i>완료<i style="background:#a8946e"></i>사내</span></div><div class="tablewrap"><table style="min-width:888px">
-      <!-- v115: 열 13개에 맞춰 colgroup 재작성(기존 12개라 폭이 한 칸씩 밀렸다). 공정(조)·부품코드를 줄이고 부품명을 넓혀 전체 이름이 보이게 하고, 공정1~7 이 화면에 들어오도록 폭을 잡았다 --><colgroup><col style="width:30px"><col style="width:44px"><col style="width:92px"><col style="width:132px"><col style="width:44px"><col style="width:78px"><col style="width:78px"><col style="width:78px"><col style="width:78px"><col style="width:78px"><col style="width:78px"><col style="width:78px"></colgroup>
-      <thead><tr><th></th><th title="공정(조)">조</th><th>부품코드</th><th>부품명</th><th title="가공계획 부품 수량 — 발주 기본 수량">수량</th><th>공정1</th><th>공정2</th><th>공정3</th><th>공정4</th><th>공정5</th><th>공정6</th><th>공정7</th></tr></thead>
+    <div class="box"><div class="box-title">부품별 가공공정 리스트<span class="legend"><i style="background:#8fdc6b"></i>다음 공정(우클릭=발주)<i style="background:#8e6bb0"></i>요청<i style="background:#e07a1f"></i>출고<i style="background:#2f6fb5"></i>입고<i style="background:#8b98a3"></i>완료<i style="background:#a8946e"></i>사내</span></div><div class="tablewrap"><table style="min-width:1128px">
+      <!-- v149: 공정1~10. 화면보다 넓으면 가로로 밀어(스크롤) 보고, 왼쪽 5칸(조·부품코드·부품명·수량)은 고정된다 --><colgroup><col style="width:30px"><col style="width:40px"><col style="width:92px"><col style="width:132px"><col style="width:44px"><col style="width:82px"><col style="width:82px"><col style="width:82px"><col style="width:82px"><col style="width:82px"><col style="width:82px"><col style="width:82px"><col style="width:82px"><col style="width:82px"><col style="width:82px"></colgroup>
+      <thead><tr><th></th><th title="공정(조)">조</th><th>부품코드</th><th>부품명</th><th title="가공계획 부품 수량 — 발주 기본 수량">수량</th><th>공정1</th><th>공정2</th><th>공정3</th><th>공정4</th><th>공정5</th><th>공정6</th><th>공정7</th><th>공정8</th><th>공정9</th><th>공정10</th></tr></thead>
       <tbody id="routeBody"></tbody></table></div></div>
     <div class="box venbox"><div class="box-title">협력업체리스트</div>
       <div class="searchbar"><input id="venQ" placeholder="업체 검색" oninput="venFind()" title="입력하면 협력업체가 걸러집니다 (Esc: 지우기)" onkeydown="if(event.key==='Escape'){this.value='';venFind()}"></div>
@@ -196,7 +208,7 @@ function venFind(){const q=(venQ.value||'').trim().toLowerCase();
  venIdx=-1;renderVendors();
  msg(q?`협력업체 ${venView.length}건 검색`:`협력업체 ${venView.length}건`)}
 function renderVendors(){venBody.innerHTML=venView.map((v,i)=>`<tr class="${i===venIdx?'sel':''}" onclick="pickVendor(${i})"><td>${v}</td></tr>`).join('')}
-var MAXSTEP=7;   /* v115: 부품별 가공공정은 공정1~7 까지만 표시·발주한다 */
+var MAXSTEP=10;  /* v149: 부품별 가공공정은 공정1~10 까지 (화면보다 넓으면 가로 스크롤) */
 function renderRoutes(){
  routeBody.innerHTML=ROUTES.map((r,ri)=>{
   if(r.steps&&r.steps.length>MAXSTEP)r.steps=r.steps.slice(0,MAXSTEP);   /* v115: 어떤 경로로 들어와도 공정1~7 까지만 */
@@ -229,6 +241,7 @@ function renderRoutes(){
      const click=(cls==='s-next'||cls==='s-ext'||cls==='s-pick')?` onclick="pickCellLater(${ri},${i})"`:'';
      const t=`공정${i+1} ${c}`+(o.vendor?` · ${o.vendor}`:'')+(st?` · ${st}`:cls==='s-ext'?' · 우클릭하면 다음 공정부터 여기까지 한 업체에 묶음 발주':'');
      return `<td class="route ${cls}" title="${_esc(t)} · 우클릭: 발주 · 입고 · 입고확정 · 취소" ondblclick="return ctxMenu(event,${ri},${i})" oncontextmenu="return ctxMenu(event,${ri},${i})"${click}>${_esc(procName(c))}${lab?`<span class="st">${lab}</span>`:''}</td>`}).join('')+
+   '<td></td>'.repeat(Math.max(0,MAXSTEP-(r.steps||[]).length))+   /* v149: 남는 공정 칸도 그려 표 선이 어긋나지 않게 */
    `</tr>`}).join('');
 }
 function renderReq(){reqBody.innerHTML=REQ.map((r,i)=>`<tr><td class="c">${i+1}</td><td class="c"><input type="checkbox" data-no="${r.no}"></td><td>${r.vendor}</td><td>${r.job}</td><td>${r.item}</td><td class="c">${r.proc}</td><td class="c">${r.procName}</td><td>${r.part}</td><td>${r.partName}</td><td class="c">${r.sn||""}${r.snOf?"/"+r.snOf:""}</td><td class="c">${r.mp}</td><td>${r.mpName}</td><td class="c"><input value="${r.qty??1}" style="width:52px;text-align:right;padding:1px 4px;border:1px solid #b7c2cb" onclick="event.stopPropagation()" onchange="setQty(${r.no},this.value)"></td><td class="c">${r.odate}</td><td class="c">${r.rdate}</td><td>${r.remark}</td><td class="c">${r.writer}</td></tr>`).join('');countText.textContent=`제번 ${jobView.length}건 / 요청 ${REQ.length}건`}
@@ -765,7 +778,7 @@ window.MESLOOK_RELOAD_VENDORS=async()=>{MESLOOK.invalidate('vendor_outsourcing')
  if(typeof renderRoutes==='function')renderRoutes();};
 </script>
 <script src="mes_price.js?v=92"></script>
-<script src="mes_route_edit.js?v=147"></script>
+<script src="mes_route_edit.js?v=149"></script>
 <script src="mes_vendorcheck.js?v=92"></script>
 <script>
 function sampleFill(){
