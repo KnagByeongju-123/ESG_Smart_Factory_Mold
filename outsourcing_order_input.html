@@ -157,8 +157,10 @@ function orderAgg(lines){
  if(open.length){st='출고';line=open[0]}
  else if(recv.length){st='입고';line=recv[0]}
  else if(done.length){st='완료';line=done[done.length-1]}
- const vs=[...new Set(a.map(l=>String(l.vendor_name||'').trim()).filter(Boolean))];
- return {st,vendor:vs.length===1?vs[0]:(vs.length>1?vs.join(' 외 '+(vs.length-1)+'곳'):''),line,lines:a,
+ /* 발주처 표시는 기존 방식 유지: 같은 공정에 발주 이력이 여러 건이면 최신 발주건의 업체명을 표시한다.
+    수량만 전체 발주건을 합산하고, 입고 처리는 미입고 발주건을 대상으로 한다. */
+ const latest=a[a.length-1]||{};
+ return {st,vendor:String(latest.vendor_name||''),line,lines:a,
    openLines:open,recvLines:recv,orderQty:ord,receiptQty:got,remainQty:Math.max(ord-got,0)};
 }
 async function loadOrdered(job){
