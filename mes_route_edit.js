@@ -1,4 +1,4 @@
-/* mes_route_edit.js — v150
+/* mes_route_edit.js — v155
  * ─────────────────────────────────────────────────────────────────────────
  * 외주가공 발주 화면에서 가공계획(부품별 가공공정)을 바로 고친다.
  *
@@ -7,6 +7,7 @@
  *     · 공정 추가 / 삭제 / ↑↓ 순서 바꾸기 / 공정 드롭다운으로 교체
  *     · 사내 ☑                          : 사내가공 — 발주 대상에서 빠지고 순서 판정에서 건너뛴다
  *     · [▣ 가공계획 적용]                : machining_plan_parts 에 저장하여 해당 부품에 적용
+ *     · [↻ 신규발주]                      : 기존 이력은 남기고 새 가공 차수로 공정1부터 다시 시작
  *     · [기준공정으로 저장]              : 새 기준공정으로, 또는 고른 기준공정을 덮어쓴다
  *                                         (machining_standard_routes + 기준정보 마스터)
  *   이미 발주된 공정(요청·출고·입고·완료)은 잠겨서 바꾸거나 지울 수 없다.
@@ -106,6 +107,7 @@ function body() {
 }
 function foot() {
   return `<button class="btn go" type="button" onclick="MESROUTE.savePlan()" title="이 부품의 공정을 가공계획에 저장하여 적용합니다. 기준공정 칸에 직접 입력한 이름도 함께 저장됩니다.">▣ 가공계획 적용</button>
+   <button class="btn" type="button" onclick="MESROUTE.newOrder()" style="color:#a04000;font-weight:700" title="기존 발주·입고 이력은 그대로 남기고, 새 가공 차수로 첫 외주공정부터 다시 발주합니다.">↻ 신규발주</button>
    <button class="btn" type="button" onclick="MESROUTE.saveStd()" title="지금 공정 구성을 기준공정으로 저장합니다. 새 이름을 직접 입력하면 다른 이름으로 신규 저장됩니다.">기준공정 저장</button>
    <button class="btn" type="button" onclick="ctxClose()">닫기</button>`;
 }
@@ -189,6 +191,21 @@ function applyStd(pick) {
   E.steps = keep.concat(rest).slice(0, MAXN);
   E.r.stdName = s.name; E.stdName = s.name;
   paint(); say(`기준공정 ${s.no} (${s.name}) 적용 — ${E.steps.map(x => pn(x.code) + (x.house ? '[사내]' : '')).join(' → ')} · [▣ 가공계획 적용]으로 확정하세요.`);
+}
+
+/* ── 신규발주 : 기존 이력 유지 + 새 차수 시작 ─────────────── */
+function newOrder() {
+  if (!E) return;
+  const { r, ri } = E;
+  const hasHistory = (r.steps || []).some((_, i) => { try { return !!stepInfo(r, i).st; } catch (e) { return false; } });
+  const text = hasHistory
+    ? `${r.part}의 현재 가공 진행을 이전 차수로 남기고 신규발주를 시작합니다.\n\n· 기존 발주/입고/확정 이력은 삭제하거나 수정하지 않습니다.\n· 새 차수는 첫 외주공정부터 다시 시작합니다.\n· 첫 발주를 실제 등록해야 신규 차수가 확정됩니다.\n\n계속할까요?`
+    : `${r.part}은 아직 기존 외주가공 발주 이력이 없습니다.\n그래도 신규발주 차수로 첫 공정부터 시작할까요?`;
+  if (!confirm(text)) return;
+  const f = window.ctxStartNewCycle;
+  if (typeof f !== 'function') return say('신규발주 기능을 불러오지 못했습니다. 화면을 새로고침한 뒤 다시 시도하세요.');
+  ctxClose();
+  setTimeout(() => f(ri), 0);
 }
 
 /* ── 저장 : 가공계획 ─────────────────────────────────────── */
@@ -287,5 +304,5 @@ ctxClose = function () { try { document.getElementById('ctxPop').classList.remov
   let n = 0; const iv = setInterval(() => { if (window.MESDB && MESDB.online) { clearInterval(iv); go(); } else if (++n > 60) clearInterval(iv); }, 200);
 })();
 
-window.MESROUTE = { open, applyStd, setCode, setHouse, move, add, del, savePlan, saveStd, loadStd };
+window.MESROUTE = { open, applyStd, setCode, setHouse, move, add, del, newOrder, savePlan, saveStd, loadStd };
 })();

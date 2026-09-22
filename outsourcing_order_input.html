@@ -144,6 +144,24 @@ const procName=c=>{const k=stepCode(c);if(!k)return'';return PROCNAME[k]||PROCNA
 const ORDERED=new Map();                                   /* '품번|순번' → 공정별 발주라인 집계 (추가발주 포함) */
 const okey=(pt,k)=>[pt||'',k||''].join('|');
 const ST_DB={'발주':'출고','입고':'입고','입고확정':'완료'};
+/* v155: 신규발주(새 가공 차수) — 기존 order_lines 는 그대로 이력으로 남기고,
+   remark 의 [신규발주:차수ID] 표식 이후/같은 차수의 발주만 현재 진행으로 본다.
+   별도 DB 컬럼을 추가하지 않아 기존 데이터/화면과 호환된다. */
+const CYCLE=new Map();                                      /* 품번 → 현재 신규발주 차수ID */
+const CYCLE_RE=/\[신규발주:([^\]]+)\]/;
+const cycleKey=p=>String(p||'');
+const cycleOf=l=>{const m=String(l&&l.remark||'').match(CYCLE_RE);return m?m[1]:''};
+const newCycleId=()=>{const d=new Date(),z=n=>String(n).padStart(2,'0');return `N${d.getFullYear()}${z(d.getMonth()+1)}${z(d.getDate())}${z(d.getHours())}${z(d.getMinutes())}${z(d.getSeconds())}-${String(Date.now()).slice(-4)}`};
+function withCycleRemark(remark,id){const r=String(remark||'').trim();return id?`[신규발주:${id}]${r?' '+r:''}`:(r||null)}
+/* 품번별 가장 최근 신규발주 차수를 찾고, 그 차수의 라인만 현재 진행으로 남긴다.
+   신규발주 표식이 한 번도 없는 품번은 기존 방식대로 전체 이력을 사용한다. */
+function activeCycleRows(rows,remember=true){
+ const a=(rows||[]).slice().sort((x,y)=>(Number(x.line_id)||0)-(Number(y.line_id)||0));
+ const latest=new Map();
+ a.forEach(l=>{const id=cycleOf(l);if(id)latest.set(cycleKey(l.part_no),id)});
+ if(remember){CYCLE.clear();latest.forEach((id,k)=>CYCLE.set(k,id))}
+ return a.filter(l=>{const id=latest.get(cycleKey(l.part_no));return !id||cycleOf(l)===id});
+}
 /* v154: 같은 공정에 추가발주가 여러 건 있어도 공정 셀에는 합계 발주/입고수량을 표시하고,
    미입고가 1개라도 남아 있으면 계속 '출고' 상태로 두어 우클릭 입고가 가능하게 한다. */
 function orderAgg(lines){
@@ -170,7 +188,7 @@ async function loadOrdered(job){
   const ex=await MESDB.table('order_lines')
     .select(`select=line_id,part_no,vendor_name,machining_process_code,step_no,status,order_qty,receipt_qty,unit_price,quote_price,confirm_price,nego_rate,order_date,required_date,receipt_date,confirm_date,remark&category=eq.${encodeURIComponent('외주가공')}&job_no=eq.${encodeURIComponent(job)}&order=line_id`,{fresh:true});
   const groups=new Map();
-  (ex||[]).forEach(e=>{if(!ST_DB[String(e.status||'')])return;
+  activeCycleRows(ex||[],true).forEach(e=>{if(!ST_DB[String(e.status||'')])return;
    const k=e.step_no?okey(e.part_no,'#'+e.step_no):okey(e.part_no,e.machining_process_code);
    const a=groups.get(k)||[];a.push(e);groups.set(k,a)});
   groups.forEach((a,k)=>ORDERED.set(k,orderAgg(a)));
@@ -314,7 +332,7 @@ async function pushDown(){const j=jobView[jobIdx];if(!j)return;
   if(!idx.length){_skip.push(p.part);return}
   const n=(p.steps||[]).map(stepCode).filter(Boolean).length;
   idx.forEach(i=>{const mp=stepCode(p.steps[i]);
-   REQ.push({no:REQ.length?Math.max(...REQ.map(r=>r.no))+1:1,vendor:curVendor(),job:j.job,item:j.item,proc:(p.jo||j.proc||'1'),procName:joName(p.jo||j.proc||'1',j.setQty||1),part:p.part,partName:p.name,sn:i+1,snOf:n,mp,mpName:procName(mp),qty:(Number(p.qty)||1),odate:new Date().toISOString().slice(0,10),rdate:d,remark:'',writer:OWNER,price:0,amount:0});_added++});
+   REQ.push({no:REQ.length?Math.max(...REQ.map(r=>r.no))+1:1,vendor:curVendor(),job:j.job,item:j.item,proc:(p.jo||j.proc||'1'),procName:joName(p.jo||j.proc||'1',j.setQty||1),part:p.part,partName:p.name,sn:i+1,snOf:n,mp,mpName:procName(mp),qty:(Number(p.qty)||1),odate:new Date().toISOString().slice(0,10),rdate:d,remark:'',writer:OWNER,price:0,amount:0,cycleId:CYCLE.get(cycleKey(p.part))||''});_added++});
   PICK.delete(ri);
  });
  if(!_added){renderRoutes();return msg('선택한 부품은 지금 발주할 수 있는 공정이 없습니다. (직전 공정 입고 대기 또는 전공정 완료)')}
@@ -338,9 +356,12 @@ function pullUp(){const ids=[...reqBody.querySelectorAll('input:checked')].map(x
 /* v62: 같은 제번·품번·업체(외주가공은 가공공정 포함)의 미입고 발주가 있으면 중복 등록 차단 */
 /* v97: 저장 직전 DB 재확인 — (1) 같은 부품·공정순번이 이미 발주/입고 중이면 차단 (업체 무관), (2) 직전 순번이 입고/입고확정이 아니면 차단 */
 async function dupCheck(cat,job,rows){
- const ex=await MESDB.table('order_lines').select(`select=part_no,machining_process_code,step_no,status,order_qty,receipt_qty&category=eq.${encodeURIComponent(cat)}&job_no=eq.${encodeURIComponent(job)}&order=line_id`);
+ const ex0=await MESDB.table('order_lines').select(`select=line_id,part_no,machining_process_code,step_no,status,order_qty,receipt_qty,remark&category=eq.${encodeURIComponent(cat)}&job_no=eq.${encodeURIComponent(job)}&order=line_id`);
+ /* v155: 현재 신규발주 차수만 중복/순서 판정에 사용한다. 신규발주 첫 발주는 과거 차수를 전부 무시한다. */
+ const freshParts=new Set((rows||[]).filter(x=>x.newCycle).map(x=>String(x.part||'')));
+ const ex=activeCycleRows(ex0||[],false).filter(e=>!freshParts.has(String(e.part_no||'')));
  /* v154: 추가발주가 여러 줄이면 '마지막 줄 상태'가 아니라 공정 전체 발주/입고 잔량으로 순서를 판단한다. */
- const gs=new Map();(ex||[]).forEach(e=>{if(!ST_DB[e.status])return;const k=okey(e.part_no,e.step_no?'#'+e.step_no:e.machining_process_code),a=gs.get(k)||[];a.push(e);gs.set(k,a)});
+ const gs=new Map();ex.forEach(e=>{if(!ST_DB[e.status])return;const k=okey(e.part_no,e.step_no?'#'+e.step_no:e.machining_process_code),a=gs.get(k)||[];a.push(e);gs.set(k,a)});
  const st=new Map();gs.forEach((a,k)=>{const agg=orderAgg(a);st.set(k,agg.st)});
  const bad=[];
  for(const r of rows){
@@ -357,7 +378,7 @@ async function dupCheck(cat,job,rows){
 }
 async function save(){if(!REQ.length)return msg('저장할 발주 자료가 없습니다.');if(!window.MESDB||!MESDB.online){msg(`외주가공 발주 ${REQ.length}건을 저장했습니다. (DB 미연결 - 로컬)`);return}try{
  const dup=await dupCheck('외주가공',REQ[0].job,REQ);if(dup.length)return msg(`발주할 수 없는 공정이 있습니다: ${[...new Set(dup)].join(', ')} — 요청 리스트에서 제외하세요.`);
- await MESDB.newLines(REQ.map(r=>({category:'외주가공',status:'발주',vendor_name:r.vendor,job_no:r.job,item_name:r.item||null,process_code:r.proc,process_name:r.procName,part_no:r.part,part_name:r.partName,machining_process_code:r.mp,machining_process_name:r.mpName||null,step_no:Number(r.sn)||null,order_qty:Number(r.qty)||1,unit_price:Number(r.price)||null,quote_price:Number(r.amount)||null,order_date:r.odate||null,required_date:r.rdate||null,owner_name:r.writer||null,remark:r.remark||null})));const n=REQ.length;const _j=REQ[0].job;REQ.length=0;renderReq();try{MESDB.notify&&MESDB.notify(['order_lines'])}catch(e){}await loadOrdered(_j);renderRoutes();PICK.clear();msg(`외주가공 발주 ${n}건을 DB에 등록했습니다. (공정 리스트에 출고 표시) 입고되면 다음 공정을 발주할 수 있습니다.`)}catch(e){msg('DB 등록 실패: '+e.message.slice(0,120))}}
+ await MESDB.newLines(REQ.map(r=>({category:'외주가공',status:'발주',vendor_name:r.vendor,job_no:r.job,item_name:r.item||null,process_code:r.proc,process_name:r.procName,part_no:r.part,part_name:r.partName,machining_process_code:r.mp,machining_process_name:r.mpName||null,step_no:Number(r.sn)||null,order_qty:Number(r.qty)||1,unit_price:Number(r.price)||null,quote_price:Number(r.amount)||null,order_date:r.odate||null,required_date:r.rdate||null,owner_name:r.writer||null,remark:withCycleRemark(r.remark,r.cycleId||'')})));const n=REQ.length;const _j=REQ[0].job;REQ.length=0;renderReq();try{MESDB.notify&&MESDB.notify(['order_lines'])}catch(e){}await loadOrdered(_j);renderRoutes();PICK.clear();msg(`외주가공 발주 ${n}건을 DB에 등록했습니다. (공정 리스트에 출고 표시) 입고되면 다음 공정을 발주할 수 있습니다.`)}catch(e){msg('DB 등록 실패: '+e.message.slice(0,120))}}
 function exportCsv(){const out=[['협력업체','제번','공정','품번','부품명','순번','가공공정코드','가공공정','발주수량','발주월','입고요구월','작성자'],...REQ.map(r=>[r.vendor,r.job,r.proc,r.part,r.partName,(r.sn||'')+(r.snOf?'/'+r.snOf:''),r.mp,r.mpName,r.qty??1,r.odate,r.rdate,r.writer])];const csv='\ufeff'+out.map(a=>a.map(v=>'"'+String(v??'').replaceAll('"','""')+'"').join(',')).join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download='outsourcing_order_input.csv';a.click();URL.revokeObjectURL(a.href)}
 function msg(t){message.textContent=t}
 reqDate.value=new Date(Date.now()+12*864e5).toISOString().slice(0,10);
@@ -525,6 +546,20 @@ function ctxMenu(ev,ri,i){
  return false;
 }
 function ctxInfo(ev,title,html){ctxOpen(ev,title,'',html);return false}
+/* v155: 공정 편집창의 [신규발주] — 기존 발주/입고 이력은 건드리지 않고
+   새 차수를 만들어 첫 외주공정부터 다시 발주한다. 실제 차수 시작은 첫 발주 저장 시 확정된다. */
+function ctxStartNewCycle(ri){
+ const r=ROUTES[Number(ri)];if(!r)return msg('신규발주할 부품을 찾지 못했습니다.');
+ const j=jobView[jobIdx]||{};
+ let i=-1;for(let k=0;k<(r.steps||[]).length;k++){if(stepCode(r.steps[k])&&!isHouse(r,k)){i=k;break}}
+ if(i<0)return msg(`${r.part} 외주 발주 가능한 공정이 없습니다. (전 공정 사내가공)`);
+ const c=stepCode(r.steps[i]),o={st:'',vendor:'',orderQty:0,receiptQty:0,remainQty:0,lines:[]};
+ PICK.clear();CTX={ri:Number(ri),i,r,c,o,st:'',job:j,newCycle:true,cycleId:newCycleId(),idx:[i]};
+ const ev={clientX:Math.max(20,Math.round(window.innerWidth*.42)),clientY:Math.max(60,Math.round(window.innerHeight*.28))};
+ const head=`<div class="sub"><b>${_esc(j.job||'')}</b> · ${_esc(r.part)} ${_esc(r.name||'')} · <b>신규발주</b> · 공정${i+1} ${_esc(procName(c))}</div>`;
+ return ctxOrder(ev,head);
+}
+window.ctxStartNewCycle=ctxStartNewCycle;
 /* v147: 사내가공 칸 — 발주 대상이 아님을 알리고 공정 편집으로 안내 */
 function ctxHouse(ev,ri,i){
  const r=ROUTES[ri],c=stepCode(r.steps[i]),j=jobView[jobIdx]||{};
@@ -540,7 +575,7 @@ function ctxHouse(ev,ri,i){
    · 셀을 눌러 범위를 잡아 두었으면(PICK) 그 범위 전체
    · 아니면 다음 공정(nx)부터 우클릭한 공정(i)까지 — 중간에 이미 발주된 공정이 있으면 그 칸 하나만 */
 function ctxSteps(){
- const {ri,r,i}=CTX;const nx=nextStep(r);
+ const {ri,r,i}=CTX;if(CTX&&CTX.newCycle)return [i];const nx=nextStep(r);
  if(nx<0||i<nx)return [i];
  const picks=PICK.has(ri)?pickSteps(r):[];
  if(picks.length>1&&picks.includes(i))return picks;
@@ -554,6 +589,7 @@ async function ctxOrder(ev,head){
  const multi=idx.length>1;
  const vopts=VENDORS.map(v=>`<option value="${_esc(v)}"${v===curVendor()?' selected':''}>${_esc(v)}</option>`).join('');
  const today=T0(),rd=reqDate.value||new Date(Date.now()+12*864e5).toISOString().slice(0,10);
+ const cycleNote=CTX.newCycle?`<div class="note" style="border-color:#e5ad62;background:#fff7ea;color:#8a4f08"><b>신규발주</b> — 기존 가공 진행 이력은 삭제하지 않고 이전 차수로 남깁니다. 이 발주부터 새 차수로 공정1부터 다시 진행합니다.</div>`:'';
  const common=`
    <label>협력업체</label><select id="cxVendor" class="full" onchange="ctxPrice()"><option value="">(업체 선택)</option>${vopts}</select>
    <label>발주수량</label><input id="cxQty" class="r" value="${Number(r.qty)||1}" inputmode="numeric" onchange="ctxAmt()">
@@ -576,16 +612,16 @@ async function ctxOrder(ev,head){
    <table class="stp"><thead><tr><th style="width:54px">순번</th><th>가공공정</th><th style="width:94px">단가</th><th style="width:94px">금액</th></tr></thead>
     <tbody>${rows}</tbody>
     <tfoot><tr><th colspan="3" class="r">발주금액 합계</th><th class="r" id="cxTot">0</th></tr></tfoot></table>
-   <div class="note" id="cxNote">공정 ${idx.length}개를 한 업체에 순서대로 발주합니다. 공정별 단가는 업체를 고르면 자동 조회됩니다.</div>`;
+   ${cycleNote}<div class="note" id="cxNote">공정 ${idx.length}개를 한 업체에 순서대로 발주합니다. 공정별 단가는 업체를 고르면 자동 조회됩니다.</div>`;
  }else{
   const c=stepCode(r.steps[i]);
-  title=`공정${i+1} ${procName(c)} — 발주`;
+  title=`${CTX.newCycle?'신규발주 · ':''}공정${i+1} ${procName(c)} — 발주`;
   body=`<div class="g">${common}
     <label>단가</label><input id="cxPrice" class="r" value="" placeholder="예: 45,000" inputmode="numeric" onchange="ctxPriceEdit(this)">
     <label>발주금액</label><input id="cxAmt" class="r" value="" placeholder="단가 입력 시 자동" readonly>
     <label>비고</label><input id="cxRemark" class="full" placeholder="선택">
    </div>
-   <div class="note" id="cxNote">업체를 선택하면 공정단가변동등록에서 발주일 기준 단가를 자동 조회합니다. 이력이 없으면 단가를 직접 입력하세요.</div>`;
+   ${cycleNote}<div class="note" id="cxNote">업체를 선택하면 공정단가변동등록에서 발주일 기준 단가를 자동 조회합니다. 이력이 없으면 단가를 직접 입력하세요.</div>`;
  }
  ctxOpen(ev,title,'k-order',head+body,
   `<button class="btn" style="display:none" onclick="ctxAddReq()" title="바로 등록하지 않고 아래 구매요청 리스트에 넣습니다">↓ 요청 리스트</button>
@@ -640,13 +676,14 @@ function ctxRows(){
  const n=(r.steps||[]).map(stepCode).filter(Boolean).length;
  const qty=Math.max(1,Math.round(_n(_v('cxQty'))));
  const vendor=_v('cxVendor'),od=_v('cxOdate')||T0(),rd=_v('cxRdate')||'',rm=_v('cxRemark')||'';
+ const cycleId=(CTX.newCycle?(CTX.cycleId||(CTX.cycleId=newCycleId())):(CYCLE.get(cycleKey(r.part))||''));
  let no=REQ.length?Math.max(...REQ.map(x=>x.no))+1:1;
  return idx.map(k=>{const c=stepCode(r.steps[k]);
   const price=_n(idx.length>1?_v('cxP'+k):_v('cxPrice'));
   return {no:no++,vendor,job:job.job,item:job.item,
    proc:(r.jo||job.proc||'1'),procName:joName(r.jo||job.proc||'1',job.setQty||1),
    part:r.part,partName:r.name,sn:k+1,snOf:n,mp:c,mpName:procName(c),
-   qty,odate:od,rdate:rd,remark:rm,writer:OWNER,price,amount:price*qty}});
+   qty,odate:od,rdate:rd,remark:rm,writer:OWNER,price,amount:price*qty,cycleId,newCycle:!!CTX.newCycle}});
 }
 function ctxAddReq(){
  const rows=ctxRows();if(!rows.length)return msg('발주할 공정이 없습니다.');
@@ -672,11 +709,13 @@ async function ctxOrderNow(){
   /* 묶음 발주는 rows 를 통째로 넘긴다 — dupCheck 가 이번 묶음 안의 직전 공정을 인정한다 */
   const bad=await dupCheck('외주가공',rows[0].job,rows);
   if(bad.length){msg('발주할 수 없습니다: '+[...new Set(bad)].join(', '));if(b){b.disabled=false;b.textContent=b0}return}
-  await MESDB.newLines(rows.map(row=>({category:'외주가공',status:'발주',vendor_name:row.vendor,job_no:row.job,item_name:row.item||null,process_code:row.proc,process_name:row.procName,part_no:row.part,part_name:row.partName,machining_process_code:row.mp,machining_process_name:row.mpName||null,step_no:Number(row.sn)||null,order_qty:row.qty,unit_price:row.price||null,quote_price:row.amount||null,order_date:row.odate||null,required_date:row.rdate||null,owner_name:row.writer||null,remark:row.remark||null})));
+  await MESDB.newLines(rows.map(row=>({category:'외주가공',status:'발주',vendor_name:row.vendor,job_no:row.job,item_name:row.item||null,process_code:row.proc,process_name:row.procName,part_no:row.part,part_name:row.partName,machining_process_code:row.mp,machining_process_name:row.mpName||null,step_no:Number(row.sn)||null,order_qty:row.qty,unit_price:row.price||null,quote_price:row.amount||null,order_date:row.odate||null,required_date:row.rdate||null,owner_name:row.writer||null,remark:withCycleRemark(row.remark,row.cycleId||'')})));
   const tot=rows.reduce((a,x)=>a+(Number(x.amount)||0),0),f=rows[0],l=rows[rows.length-1];
-  await ctxAfter(f.job, rows.length>1
-   ? `${f.part} 공정${f.sn}~${l.sn} ${rows.length}개 (${rows.map(x=>x.mpName).join(' → ')}) → ${f.vendor} 묶음 발주 (합계 ${_won(tot)}원, 입고요구 ${f.rdate||'-'}). 공정 리스트에 출고 표시.`
-   : `${f.part} 공정${f.sn} ${f.mpName} → ${f.vendor} 발주 등록 (${_won(tot)}원, 입고요구 ${f.rdate||'-'}). 공정 리스트에 출고 표시.`);
+  await ctxAfter(f.job, f.newCycle
+   ? `${f.part} 신규발주 시작 — 기존 가공 이력은 이전 차수로 유지하고, 공정${f.sn} ${f.mpName}부터 새 차수로 발주했습니다. (${f.vendor}, ${_won(tot)}원)`
+   : rows.length>1
+    ? `${f.part} 공정${f.sn}~${l.sn} ${rows.length}개 (${rows.map(x=>x.mpName).join(' → ')}) → ${f.vendor} 묶음 발주 (합계 ${_won(tot)}원, 입고요구 ${f.rdate||'-'}). 공정 리스트에 출고 표시.`
+    : `${f.part} 공정${f.sn} ${f.mpName} → ${f.vendor} 발주 등록 (${_won(tot)}원, 입고요구 ${f.rdate||'-'}). 공정 리스트에 출고 표시.`);
  }catch(e){msg('발주 실패: '+String(e.message||e).slice(0,120));if(b){b.disabled=false;b.textContent=b0}}
 }
 
@@ -843,7 +882,7 @@ window.MESLOOK_RELOAD_VENDORS=async()=>{MESLOOK.invalidate('vendor_outsourcing')
  if(typeof renderRoutes==='function')renderRoutes();};
 </script>
 <script src="mes_price.js?v=92"></script>
-<script src="mes_route_edit.js?v=150"></script>
+<script src="mes_route_edit.js?v=155"></script>
 <script src="mes_vendorcheck.js?v=92"></script>
 <script>
 function sampleFill(){
