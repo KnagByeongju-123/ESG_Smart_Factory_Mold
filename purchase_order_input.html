@@ -94,7 +94,7 @@ let VENDORS=[];  /* 협력업체는 마스터에서 로드 (mes_lookup.js) */
 const REQ=[];
 let jobIdx=0,venIdx=-1,jobView=[...JOBS],venView=[...VENDORS];
 const money=v=>Number(v||0).toLocaleString('ko-KR');
-function renderJobs(){jobBody.innerHTML=jobView.map((j,i)=>`<tr class="${i===jobIdx?'sel':''}" onclick="pickJob(${i})"><td>${j.job}</td><td>${j.model||''}</td><td class="c">${j.proc}</td><td class="c">${j.procName}</td></tr>`).join('');countText.textContent=`제번 ${jobView.length}건 / 요청 ${REQ.length}건`}
+function renderJobs(){jobBody.innerHTML=jobView.map((j,i)=>`<tr class="${i===jobIdx?'sel':''}" onclick="pickJob(${i},1)"><td>${j.job}</td><td>${j.model||''}</td><td class="c">${j.proc}</td><td class="c">${j.procName}</td></tr>`).join('');countText.textContent=`제번 ${jobView.length}건 / 요청 ${REQ.length}건`}
 /* v80: 협력업체는 체크박스로 고른다. 여러 업체에 나눠 발주할 수 있고, 어디로 나가는지 눈으로 확인된다 */
 /* v115: 협력업체는 외주가공 발주와 동일하게 — 체크박스 없이 행을 클릭해 하나를 고른다 */
 function pickedVendors(){const v=venView[venIdx];return v?[v]:[]}
@@ -148,7 +148,7 @@ function setOrd(no,v){const r=REQ.find(x=>x.no===no);if(!r)return;
 function setBuy(no,v){const r=REQ.find(x=>x.no===no);if(!r)return;
  r.buyPrice=Number(String(v).replace(/[^0-9.-]/g,''))||0;calcAmt(r);renderReq();
  msg(`${r.part} 매입단가 ${money(r.buyPrice)}원 · 매입금액 ${money(r.amount)}원`)}
-function pickJob(i){jobIdx=i;const _j=jobView[i];if(_j){try{jobQ.value=_j.job;modelQ.value=_j.model||''}catch(e){}}renderJobs();renderBom();if(typeof loadBom==='function')loadBom();msg(`${jobView[i].job} 자재표를 조회했습니다.`)}
+function pickJob(i,byRow){jobIdx=i;const _j=jobView[i];if(_j){try{jobQ.value=_j.job;modelQ.value=_j.model||'';/* v154: 행을 클릭해 자동으로 채워진 값은 검색조건으로 쓰지 않는다 (조회하면 제번 전체가 다시 보인다) */jobQ.dataset.auto=byRow?'1':'';modelQ.dataset.auto=byRow?'1':''}catch(e){}}renderJobs();renderBom();if(typeof loadBom==='function')loadBom();msg(`${jobView[i].job} 자재표를 조회했습니다.`)}
 function pickVendor(i){const v=venView[i];if(v==null)return;
  venIdx=(venIdx===i)?-1:i;renderVendors();
  msg(venIdx<0?'협력업체 선택 없음':`협력업체 ${v} 선택`)}
@@ -163,6 +163,7 @@ function selectJobRow(no){const i=jobView.findIndex(x=>x.job===no);if(i>=0)pickJ
 /* 제번을 고르거나 입력하면 → 같은 행의 모델을 채우고 그 제번을 선택한다.
    정확히 일치하지 않아도 걸러진 결과가 한 건이면 그 행으로 맞춘다. */
 function onJobPick(){
+ try{jobQ.dataset.auto='';modelQ.dataset.auto=''}catch(e){}   /* v154: 직접 친 값은 검색조건 */
  let j=jobExact(jobQ.value);
  applyFilter();
  if(!j&&jobView.length===1)j=jobView[0];
@@ -172,6 +173,7 @@ function onJobPick(){
 }
 /* 모델을 고르거나 입력하면 → 같은 행의 제번을 채우고 선택한다 (여러 제번이 같은 모델이면 목록만 걸러 준다) */
 function onModelPick(){
+ try{jobQ.dataset.auto='';modelQ.dataset.auto=''}catch(e){}   /* v154: 직접 친 값은 검색조건 */
  const m=String(modelQ.value||'').trim().toLowerCase();
  if(!m){applyFilter();return}
  const hit=JOBS.filter(x=>String(x.model||'').toLowerCase()===m);
@@ -183,9 +185,14 @@ function onModelPick(){
  if(jobQ.value!==j.job){jobQ.value=j.job;applyFilter()}
  selectJobRow(j.job);
 }
-function applyFilter(){const j=jobQ.value.trim().toLowerCase(),md=modelQ.value.trim().toLowerCase();
+/* v154: 행 클릭으로 자동으로 채워진 칸은 검색조건에서 뺀다 — 직접 쳐 넣거나 고른 값만 거른다 */
+function _fq(el){try{return el.dataset.auto==='1'?'':String(el.value||'').trim().toLowerCase()}catch(e){return ''}}
+function applyFilter(){const j=_fq(jobQ),md=_fq(modelQ);
+ const cur=(jobView[jobIdx]||{}).job;
  jobView=JOBS.filter(x=>(!j||x.job.toLowerCase().includes(j))&&(!md||(x.model||'').toLowerCase().includes(md)));
- jobIdx=0;renderJobs();renderBom();renderReq();
+ /* v154: 조회해도 보고 있던 제번 선택은 그대로 둔다 (목록에 남아 있으면) */
+ const k=cur?jobView.findIndex(x=>x.job===cur):-1;jobIdx=k>=0?k:0;
+ renderJobs();renderBom();renderReq();
  if(!jobView.length)msg(JOBS.length?'조건에 맞는 제번이 없습니다. 제번·품번 칸을 비우고 다시 조회해 보세요.'
    :'제번 목록을 불러오지 못했습니다. 잠시 후 [⌕ 조회]를 다시 누르세요.');
  else msg(`제번 ${jobView.length}건을 조회했습니다.`+(REQ.length?` · 구매요청 리스트에 ${REQ.length}건이 남아 있습니다.`:''));
