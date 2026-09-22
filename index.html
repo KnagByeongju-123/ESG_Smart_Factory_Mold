@@ -219,7 +219,7 @@ a.menu-off,a.menu-off:hover{color:#9aa5ae!important;opacity:.55;cursor:not-allow
 </div>
 
 <script>
-const APP_VER='147';
+const APP_VER='148';
 const APP={
   '영업관리':{
     secondary:[
@@ -489,7 +489,7 @@ function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;',
 function canView(path){if((path||'').includes('사용메뉴얼'))return true;const a=window.MES_AUTH;return !a||!a.session?true:a.can(path,'view')}
 function visibleModules(){return MODULES.filter(m=>{if(m==='사용메뉴얼')return true;const a=window.MES_AUTH;if(!a||!a.session||a.role==='admin'||a.role==='master')return true;
   return Object.entries(APP[m]?.menus||{}).some(([sec,gs])=>gs.some(g=>g.items.some(n=>a.can(m+'/'+sec+'/'+n,'view'))))})}
-function groupsOf(mod,sec){return (APP[mod]?.menus?.[sec]||[]).map(g=>({name:g.name,items:g.items.filter(n=>canView(mod+'/'+sec+'/'+n))})).filter(g=>g.items.length)}
+function groupsOf(mod,sec){return (APP[mod]?.menus?.[sec]||[]).map(g=>({name:g.name,items:g.items.filter(n=>!isHidden(n)&&canView(mod+'/'+sec+'/'+n))})).filter(g=>g.items.length)}
 /* 화면파일 → 메뉴경로 (iframe의 mes_db.js가 권한 판단에 사용) */
 window.MES_MENU_OF=function(file){
   for(const [mod,cfg] of Object.entries(APP))
@@ -507,6 +507,11 @@ function locate(name){
 /* v143: 원재료·구매품도 발주 화면에서 자재표 우클릭으로 입고·입고확정까지 처리하므로 같이 내린다 */
 const MENU_OFF=new Set(['외주가공 입고','외주가공 입고확정','공정이력카드','외주가공 QR스캔','수정요청게시판','사용자정보','DB 동기화','부서정보','직급정보',
  '원재료 입고','원재료 입고확정','구매품 입고','구매품 입고확정']);
+/* v148: 메뉴 숨김 — 목록에서 아예 빼고 열리지도 않게 한다.
+   (비활성 MENU_OFF 는 흐리게 남지만, 이쪽은 보이지 않는다)
+   가공계획등록: 외주가공 발주 화면에서 부품 행 우클릭 → 공정 편집으로 처리한다. */
+const MENU_HIDE=new Set(['가공계획등록']);
+const isHidden=n=>MENU_HIDE.has(n);
 function flatMenu(){const out=[];for(const mod of visibleModules())for(const sec of (APP[mod]?.secondary||[]))for(const g of groupsOf(mod,sec.name))for(const n of g.items)if(!MENU_OFF.has(n))out.push({name:n,mod,sec:sec.name,group:g.name});return out}
 
 /* ---------- 상단 모듈 메뉴 (메가) ---------- */
@@ -566,12 +571,13 @@ function toggleFav(n){
 }
 function renderFav(){
   const m=$('#favMenu');m.innerHTML='<div class="hd">즐겨찾기</div>'+(favs.length?'':'<div class="hd">상단 메뉴 항목의 ★ 를 눌러 추가</div>');
-  favs.forEach(n=>{const loc=locate(n);const b=el('button','',`<span>${esc(n)}</span><small style="margin-left:auto;color:var(--ink-3)">${loc?esc(loc.mod+' › '+loc.sec):''}</small>`);b.onclick=()=>{openByName(n);closeDd()};m.appendChild(b)});
+  favs.filter(n=>!isHidden(n)).forEach(n=>{const loc=locate(n);const b=el('button','',`<span>${esc(n)}</span><small style="margin-left:auto;color:var(--ink-3)">${loc?esc(loc.mod+' › '+loc.sec):''}</small>`);b.onclick=()=>{openByName(n);closeDd()};m.appendChild(b)});
 }
 
 /* ---------- 페이지 열기 ---------- */
 function slugify(name){return 'pending_'+Math.abs([...name].reduce((a,c)=>((a<<5)-a+c.charCodeAt(0))|0,0))}
 function openByName(name){
+  if(isHidden(name)){statusMsg.textContent=`${name} 메뉴는 사용하지 않습니다. (외주가공 발주에서 부품 행 우클릭 → 공정 편집)`;return}
   if(MENU_OFF.has(name)){statusMsg.textContent=`${name} 메뉴는 사용하지 않습니다.`;return}
   let p=pageRegistry[name];if(!p){p={id:slugify(name),title:name,file:null};pageRegistry[name]=p}
   const loc=locate(name);if(loc){p.menu=name;p.mod=loc.mod;p.sec=loc.sec;if(loc.mod!==activeModule){activeModule=loc.mod;buildTop()}}
@@ -672,12 +678,12 @@ function renderStage(){
 /* ---------- 홈 ---------- */
 function homeHTML(){
   const mods=visibleModules().filter(m=>m!=='사용메뉴얼');
-  const quick=['금형진척현황','수주등록','수주현황','제작계획등록','설계계획등록','가공계획등록','구매품 발주','조립실적등록'];
+  const quick=['금형진척현황','수주등록','수주현황','제작계획등록','설계계획등록','구매품 발주','조립실적등록','외주가공 발주'].filter(n=>!isHidden(n));
   return `<div class="home">
   <div class="card" style="grid-column:span 8"><h3>업무 모듈 <span>상단 메뉴에 마우스를 올리면 세부 메뉴가 열립니다</span></h3>
    <div class="modcard">${mods.map(m=>`<button onclick="pinModule('${m}')"><b>${MOD_ICON[m]||'▪'} ${esc(m)}</b><small>${esc(MOD_DESC[m]||'')}</small></button>`).join('')}</div></div>
   <div class="card" style="grid-column:span 4"><h3>즐겨찾기 <span>★ ${favs.length}</span></h3>
-   <div class="favlist">${favs.length?favs.map(n=>{const l=locate(n);return `<button onclick="openByName('${esc(n)}')"><span>${esc(n)}</span><small>${l?esc(l.mod):''}</small></button>`}).join(''):'<small style="color:var(--ink-3)">상단 메뉴 항목의 ★ 를 눌러 추가</small>'}</div></div>
+   <div class="favlist">${favs.filter(n=>!isHidden(n)).length?favs.filter(n=>!isHidden(n)).map(n=>{const l=locate(n);return `<button onclick="openByName('${esc(n)}')"><span>${esc(n)}</span><small>${l?esc(l.mod):''}</small></button>`}).join(''):'<small style="color:var(--ink-3)">상단 메뉴 항목의 ★ 를 눌러 추가</small>'}</div></div>
   <div class="card" style="grid-column:span 8"><h3>바로가기</h3>
    <div class="quick">${quick.filter(n=>{const l=locate(n);return l&&canView(l.mod+'/'+l.sec+'/'+n)}).map(n=>`<button onclick="openByName('${esc(n)}')"><span style="font-size:18px">${MOD_ICON[locate(n).mod]}</span>${esc(n)}</button>`).join('')}</div></div>
   <div class="card" style="grid-column:span 4"><h3>안내</h3>
