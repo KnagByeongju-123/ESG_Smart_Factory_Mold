@@ -422,6 +422,10 @@ async function doOrder() {
   if (!price &&
       !confirm('단가가 입력되지 않았습니다.\n\n발주금액 0원으로 등록되어 제조원가에 반영되지 않습니다.\n그래도 발주할까요?'))
     return say('단가를 입력한 뒤 다시 발주하세요.');
+  /* v154: 중량이 비면 금액이 단가×수량으로 잡힌다 — kg 단가면 금액이 크게 틀어지므로 한 번 묻는다 */
+  if (CFG.useWeight && !wt && price &&
+      !confirm(`중량(kg)이 비어 있습니다.\n\n발주금액이 단가 × 발주수량 (${_won(price)} × ${qty} = ${_won(amt)}원) 으로 계산됩니다.\nkg 단가라면 중량을 넣어야 금액이 맞습니다.\n\n그래도 발주할까요?`))
+    return say('중량(kg)을 입력한 뒤 다시 발주하세요.');
   /* 같은 품번이 다른 업체로 미입고 발주돼 있으면 중복구매 경고 */
   const other = linesOf(b.part).filter(l => l.status === '발주' && (l.vendor_name || '') !== vendor);
   if (other.length &&
@@ -526,13 +530,18 @@ async function doReceive(withConfirm) {
   const ord = Number(l.order_qty) || 0;
   if (ord && q > ord && !confirm(`발주수량 ${ord} 보다 많습니다. 그래도 입고 처리할까요?`)) return;
   const price = _n(_v('oxInPrice')), amt = _n(_v('oxInAmt'));
+  /* v154: 중량이 비면 입고금액이 단가×입고수량으로 잡힌다 — 발주창과 같게 한 번 묻는다 */
+  const inWt = CFG.useWeight ? _n(_v('oxInWt')) : 0;
+  if (CFG.useWeight && !inWt && price &&
+      !confirm(`중량(kg)이 비어 있습니다.\n\n입고금액이 단가 × 입고수량 (${_won(price)} × ${q} = ${_won(amt)}원) 으로 계산됩니다.\nkg 단가라면 중량을 넣어야 금액이 맞습니다.\n\n그래도 입고 처리할까요?`))
+    return say('중량(kg)을 입력한 뒤 다시 입고 처리하세요.');
   const btn = $(withConfirm ? 'oxGo2' : 'oxGo'), b0 = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = '처리 중…'; }
   try {
     const row = {
       line_id: Number(l.line_id), status: '입고',
       receipt_qty: q, receipt_date: _v('oxInDate') || T0(),
-      receipt_weight: (CFG.useWeight ? _n(_v('oxInWt')) : 0) || null,
+      receipt_weight: inWt || null,
       unit_price: price || null, receipt_amount: amt || null,
       remark: (_v('oxInRemark') || '').trim() || null,
       updated_at: new Date().toISOString()
