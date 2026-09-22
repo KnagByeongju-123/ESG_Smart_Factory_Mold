@@ -148,7 +148,8 @@ function setOrd(no,v){const r=REQ.find(x=>x.no===no);if(!r)return;
 function setBuy(no,v){const r=REQ.find(x=>x.no===no);if(!r)return;
  r.buyPrice=Number(String(v).replace(/[^0-9.-]/g,''))||0;calcAmt(r);renderReq();
  msg(`${r.part} 매입단가 ${money(r.buyPrice)}원 · 매입금액 ${money(r.amount)}원`)}
-function pickJob(i,byRow){jobIdx=i;const _j=jobView[i];if(_j){try{jobQ.value=_j.job;modelQ.value=_j.model||'';/* v154: 행을 클릭해 자동으로 채워진 값은 검색조건으로 쓰지 않는다 (조회하면 제번 전체가 다시 보인다) */jobQ.dataset.auto=byRow?'1':'';modelQ.dataset.auto=byRow?'1':''}catch(e){}}renderJobs();renderBom();if(typeof loadBom==='function')loadBom();msg(`${jobView[i].job} 자재표를 조회했습니다.`)}
+function pickJob(i,byRow,noFill){jobIdx=i;const _j=jobView[i];if(_j&&!noFill){try{jobQ.value=_j.job;modelQ.value=_j.model||'';/* v154: 행 선택으로 자동으로 채워진 값은 검색조건으로 쓰지 않는다 (조회하면 제번 전체가 다시 보인다).
+   직접 쳐 넣은 칸은 onJobPick/onModelPick 에서 다시 '검색조건'으로 되돌린다 */jobQ.dataset.auto='1';modelQ.dataset.auto='1'}catch(e){}}renderJobs();renderBom();if(typeof loadBom==='function')loadBom();msg(`${jobView[i].job} 자재표를 조회했습니다.`)}
 function pickVendor(i){const v=venView[i];if(v==null)return;
  venIdx=(venIdx===i)?-1:i;renderVendors();
  msg(venIdx<0?'협력업체 선택 없음':`협력업체 ${v} 선택`)}
@@ -163,17 +164,18 @@ function selectJobRow(no){const i=jobView.findIndex(x=>x.job===no);if(i>=0)pickJ
 /* 제번을 고르거나 입력하면 → 같은 행의 모델을 채우고 그 제번을 선택한다.
    정확히 일치하지 않아도 걸러진 결과가 한 건이면 그 행으로 맞춘다. */
 function onJobPick(){
- try{jobQ.dataset.auto='';modelQ.dataset.auto=''}catch(e){}   /* v154: 직접 친 값은 검색조건 */
+ try{jobQ.dataset.auto=''}catch(e){}   /* v154: 직접 친 제번만 검색조건 */
  let j=jobExact(jobQ.value);
  applyFilter();
  if(!j&&jobView.length===1)j=jobView[0];
  if(!j){if(!jobQ.value.trim())modelQ.value='';return}
  if(modelQ.value!==(j.model||'')){modelQ.value=j.model||'';applyFilter()}
  selectJobRow(j.job);
+ try{jobQ.dataset.auto=''}catch(e){}   /* v154: 내가 친 제번은 계속 검색조건 */
 }
 /* 모델을 고르거나 입력하면 → 같은 행의 제번을 채우고 선택한다 (여러 제번이 같은 모델이면 목록만 걸러 준다) */
 function onModelPick(){
- try{jobQ.dataset.auto='';modelQ.dataset.auto=''}catch(e){}   /* v154: 직접 친 값은 검색조건 */
+ try{modelQ.dataset.auto=''}catch(e){}   /* v154: 직접 친 품번만 검색조건 */
  const m=String(modelQ.value||'').trim().toLowerCase();
  if(!m){applyFilter();return}
  const hit=JOBS.filter(x=>String(x.model||'').toLowerCase()===m);
@@ -184,6 +186,7 @@ function onModelPick(){
  if(!j)return;
  if(jobQ.value!==j.job){jobQ.value=j.job;applyFilter()}
  selectJobRow(j.job);
+ try{modelQ.dataset.auto=''}catch(e){}   /* v154: 내가 친 품번은 계속 검색조건 (제번칸은 연동 표시일 뿐) */
 }
 /* v154: 행 클릭으로 자동으로 채워진 칸은 검색조건에서 뺀다 — 직접 쳐 넣거나 고른 값만 거른다 */
 function _fq(el){try{return el.dataset.auto==='1'?'':String(el.value||'').trim().toLowerCase()}catch(e){return ''}}
@@ -192,7 +195,10 @@ function applyFilter(){const j=_fq(jobQ),md=_fq(modelQ);
  jobView=JOBS.filter(x=>(!j||x.job.toLowerCase().includes(j))&&(!md||(x.model||'').toLowerCase().includes(md)));
  /* v154: 조회해도 보고 있던 제번 선택은 그대로 둔다 (목록에 남아 있으면) */
  const k=cur?jobView.findIndex(x=>x.job===cur):-1;jobIdx=k>=0?k:0;
- renderJobs();renderBom();renderReq();
+ renderJobs();renderReq();
+ /* v154: 보고 있던 제번이 목록에서 빠졌으면 첫 행으로 옮기고 자재표도 새로 읽는다
+    (검색칸에 친 값은 그대로 둔다 — 선택 때문에 검색조건이 바뀌지 않게) */
+ if(k<0&&jobView.length&&typeof pickJob==='function')pickJob(0,0,1);else renderBom();
  if(!jobView.length)msg(JOBS.length?'조건에 맞는 제번이 없습니다. 제번·품번 칸을 비우고 다시 조회해 보세요.'
    :'제번 목록을 불러오지 못했습니다. 잠시 후 [⌕ 조회]를 다시 누르세요.');
  else msg(`제번 ${jobView.length}건을 조회했습니다.`+(REQ.length?` · 구매요청 리스트에 ${REQ.length}건이 남아 있습니다.`:''));
