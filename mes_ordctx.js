@@ -1,4 +1,4 @@
-/* mes_ordctx.js — v157
+/* mes_ordctx.js — v154
  * ─────────────────────────────────────────────────────────────────────────
  * 원재료 발주 · 구매품 발주 화면에서 「자재표 리스트」 한 줄만 가지고
  * 발주 → 입고 → 입고확정 까지 그 자리에서 끝낸다.
@@ -18,7 +18,7 @@
  * 이 파일은 화면 스크립트 뒤에 붙이면 renderBom / loadBom 을 감싸 동작한다.
  *
  * 사용법 (화면 맨 아래)
- *   <script src="mes_ordctx.js?v=142"></script>
+ *   <script src="mes_ordctx.js?v=154"></script>
  *   <script>MESORDCTX.init({category:'원재료',useWeight:true});</script>
  *   <script>MESORDCTX.init({category:'구매품',useWeight:false});</script>
  *
@@ -64,44 +64,22 @@ let CFG = {
   bySize   : true        /* 자재단가 조회 시 두께로 사이즈 매칭 */
 };
 
-/* ── 발주 라인 캐시 : 품번 → 현재 발주차수의 order_lines 행 배열 ── */
+/* ── 발주 라인 캐시 : 품번 → order_lines 행 배열 ───────────── */
 const LINES = new Map();
 let LINES_JOB = '';
-
-/* v156: 원재료/구매품 신규발주 차수.
-   [신규발주:ID]가 처음 기록된 뒤에는 같은 품번의 최신 차수만 현재 진행으로 본다.
-   과거 order_lines 는 삭제/수정하지 않으므로 발주현황의 이력은 그대로 남는다. */
-const CYCLE = new Map();                                      /* 품번 → 현재 차수ID */
-const CYCLE_RE = /\[신규발주:([^\]]+)\]/;
-const cycleKey = p => String(p || '');
-const cycleOf = l => { const m = String(l && l.remark || '').match(CYCLE_RE); return m ? m[1] : ''; };
-const newCycleId = () => { const d=new Date(), z=n=>String(n).padStart(2,'0'); return `N${d.getFullYear()}${z(d.getMonth()+1)}${z(d.getDate())}${z(d.getHours())}${z(d.getMinutes())}${z(d.getSeconds())}-${String(Date.now()).slice(-4)}`; };
-function withCycleRemark(remark, id) {
-  let r = String(remark || '').trim().replace(CYCLE_RE, '').trim();
-  return id ? `[신규발주:${id}]${r ? ' ' + r : ''}` : (r || null);
-}
-function activeCycleRows(rows, remember=true) {
-  const a = (rows || []).slice().sort((x,y)=>(Number(x.line_id)||0)-(Number(y.line_id)||0));
-  const latest = new Map();
-  a.forEach(l => { const id=cycleOf(l); if(id) latest.set(cycleKey(l.part_no), id); });
-  if (remember) { CYCLE.clear(); latest.forEach((id,k)=>CYCLE.set(k,id)); }
-  return a.filter(l => { const id=latest.get(cycleKey(l.part_no)); return !id || cycleOf(l)===id; });
-}
-const cycleIdFor = p => CYCLE.get(cycleKey(p)) || '';
-const cleanCycleRemark = remark => String(remark || '').replace(CYCLE_RE, '').trim();
 
 /* v142: 조회가 겹쳐도 같은 발주가 두세 번 쌓이지 않게 한다.
    (처리 후 refresh 와 onChange 알림이 동시에 돌던 문제 — 결과는 지역 Map 에 담고 마지막 호출만 반영) */
 let _seq = 0;
 async function loadLines(job) {
   const my = ++_seq;
-  if (!job || !_online()) { LINES.clear(); CYCLE.clear(); LINES_JOB = job || ''; return; }
+  if (!job || !_online()) { LINES.clear(); LINES_JOB = job || ''; return; }
   const out = new Map();
   try {
     const rs = await MESDB.table('order_lines').select(
       `select=*&category=eq.${encodeURIComponent(CFG.category)}` +
       `&job_no=eq.${encodeURIComponent(job)}&order=line_id`, { fresh: true });
-    activeCycleRows(rs || [], true).forEach(r => {
+    (rs || []).forEach(r => {
       const k = r.part_no || '';
       const a = out.get(k) || []; a.push(r); out.set(k, a);
     });
@@ -163,6 +141,13 @@ function ensureUI() {
  font:inherit;box-sizing:border-box;color:#22303a;background:#fff}
 #oxPop .g input.r{text-align:right}
 #oxPop .g .full{grid-column:2/5}
+/* v154: 중량(kg) 수동 입력 — 입력칸 + [자동] 되돌리기 버튼. 손으로 고친 칸은 노란 바탕으로 표시 */
+#oxPop .g .wtbox{display:flex;gap:4px;align-items:center;min-width:0}
+#oxPop .g .wtbox input{flex:1 1 auto}
+#oxPop .g .wtbox button{flex:0 0 auto;height:25px;min-width:38px;padding:0 6px;border:1px solid #9ca9b5;
+ background:linear-gradient(#fff,#dfe6eb);font:inherit;white-space:nowrap;cursor:pointer}
+#oxPop .g .wtbox button:hover{background:#fff}
+#oxPop .g input.manual{background:#fffbe6;border-color:#d4ad3f;font-weight:700}
 #oxPop .note{font-size:11px;color:#6d7b88;margin-top:6px;line-height:1.45}
 #oxPop .info{display:grid;grid-template-columns:80px 1fr;gap:3px 8px}#oxPop .info b{color:#4d5c69;text-align:right}
 #oxPop table.ln{width:100%;border-collapse:collapse;margin-top:2px}
@@ -290,34 +275,10 @@ function openPart(ev, idx) {
 
 const headHtml = () => {
   const { b, job } = CTX;
-  const fresh = !!(CTX && CTX.newCycle), oq = fresh ? 0 : ordered(b.part), rem = fresh ? (Number(b.qty)||0) : remain(b);
   return `<div class="sub"><b>${_esc(job.job)}</b> · ${_esc(b.part)} ${_esc(b.name || '')}` +
          `${b.mat ? ' · ' + _esc(b.mat) : ''}${b.spec ? ' · ' + _esc(b.spec) : ''}` +
-         ` · 자재표 수량 <b>${Number(b.qty) || 0}</b> / 현재차수 기발주 ${oq} / 잔량 <b>${rem}</b></div>`;
+         ` · 자재표 수량 <b>${Number(b.qty) || 0}</b> / 기발주 ${ordered(b.part)} / 잔량 <b>${remain(b)}</b></div>`;
 };
-
-/* v156: 현재 차수가 모두 입고확정된 품번만 신규발주 가능. 기존 이력은 남고 새 차수는 소요수량 전체에서 다시 시작한다. */
-function startNewCycle(ev) {
-  if (!CTX || !CTX.b) return false;
-  const { b } = CTX, a = linesOf(b.part).filter(l => ['발주','입고','입고확정'].includes(String(l.status||'')));
-  if (!a.length) { say(`${b.part} 기존 발주 이력이 없습니다. 일반 발주를 이용하세요.`); return false; }
-  const openRows = a.filter(l => String(l.status||'') !== '입고확정');
-  if (openRows.length) {
-    const st = [...new Set(openRows.map(l=>l.status||'미완료'))].join(', ');
-    say(`${b.part} 현재 차수가 아직 완료되지 않았습니다 (${st}). 모든 발주건을 입고확정한 뒤 신규발주하세요.`);
-    return false;
-  }
-  if (!confirm(`${b.part} ${b.name||''}의 현재 발주 진행을 이전 차수로 남기고 신규발주를 시작합니다.
-
-· 기존 발주/입고/확정 이력은 삭제하거나 수정하지 않습니다.
-· 새 차수의 발주수량은 소요수량 ${Number(b.qty)||0}부터 다시 계산합니다.
-· 첫 발주를 실제 등록하면 신규 차수가 확정됩니다.
-
-계속할까요?`)) return false;
-  CTX.line = null; CTX.newCycle = true; CTX.cycleId = newCycleId();
-  const pos = ev && ev.clientX != null ? ev : {clientX:Math.max(20,Math.round(innerWidth*.42)),clientY:Math.max(60,Math.round(innerHeight*.28))};
-  return formOrder(pos);
-}
 
 /* ── 발주가 여러 건인 품번 : 내역 목록 ─────────────────────── */
 function listLines(ev) {
@@ -338,7 +299,6 @@ function listLines(ev) {
      <tbody id="oxLn">${rows}</tbody></table>
      <div class="note">줄을 클릭하면 그 발주건의 <b>입고 / 입고확정 / 취소</b> 창이 열립니다.</div>`,
     [{ t: '＋ 추가 발주', cls: 'go k-order', fn: e => formOrder(e) },
-     { t: '↻ 신규발주', cls: 'warn', title: '현재 차수가 모두 완료된 뒤 기존 이력을 남기고 새 발주차수로 다시 시작합니다', fn: e => startNewCycle(e) },
      { t: '닫기', fn: close }]);
   $('oxLn').querySelectorAll('tr').forEach(tr => {
     tr.onclick = e => formLine(e, a[Number(tr.dataset.k)]);
@@ -358,7 +318,7 @@ function formLine(ev, l) {
 function formOrder(ev) {
   const { b, job } = CTX;
   const vs = vendorList();
-  const rem = (CTX && CTX.newCycle) ? (Number(b.qty) || 1) : (remain(b) || Number(b.qty) || 1);
+  const rem = remain(b) || Number(b.qty) || 1;
   const rd = (() => { try { return $('reqDate').value || T0(); } catch (e) { return T0(); } })();
   open(ev, `${b.part} — 발주`, 'k-order', headHtml() + `
    <div class="g">
@@ -368,21 +328,39 @@ function formOrder(ev) {
     <label>발주일</label><input id="oxOdate" type="date" value="${T0()}">
     <label>입고요구일</label><input id="oxRdate" type="date" value="${_esc(rd)}">
     <label>단가</label><input id="oxPrice" class="r" placeholder="예: 45,000" inputmode="numeric">
-    ${CFG.useWeight ? '<label>중량(kg)</label><input id="oxWt" class="r" readonly>' : '<label></label><span></span>'}
+    ${CFG.useWeight
+      ? '<label>중량(kg)</label><span class="wtbox">' +
+        '<input id="oxWt" class="r" inputmode="decimal" title="설계치수·발주수량 기준으로 자동 계산됩니다. 실제 소재 중량이 다르면 직접 고쳐 넣으세요.">' +
+        '<button type="button" id="oxWtAuto" title="자동계산 값으로 되돌립니다">자동</button></span>'
+      : '<label></label><span></span>'}
     <label>발주금액</label><input id="oxAmt" class="r" readonly placeholder="단가 입력 시 자동">
     <label>재발주</label><select id="oxRe"><option value="">(정상 발주)</option><option>불량</option><option>실수</option><option>예비품</option><option>기타</option></select>
     <label>비고</label><input id="oxRemark" placeholder="선택">
    </div>
-   ${(CTX && CTX.newCycle) ? `<div class="note" style="border-color:#e5ad62;background:#fff7ea;color:#8a4f08"><b>신규발주</b> — 기존 이력은 이전 차수로 그대로 남고, 이 발주부터 소요수량 전체를 기준으로 새 차수가 시작됩니다.</div>` : ''}
-   <div class="note" id="oxNote">업체를 고르면 단가변동등록에서 발주일 기준 단가를 자동 조회합니다. 이력이 없으면 직접 입력하세요.</div>`,
+   <div class="note" id="oxNote">업체를 고르면 단가변동등록에서 발주일 기준 단가를 자동 조회합니다. 이력이 없으면 직접 입력하세요.</div>
+   ${CFG.useWeight ? '<div class="note">중량(kg)은 설계치수로 자동 계산되지만 <b>직접 입력</b>할 수 있습니다. 손으로 넣은 중량은 노랗게 표시되며 발주금액(단가×중량)에 그대로 쓰입니다. [자동]을 누르면 계산값으로 돌아갑니다.</div>' : ''}`,
    [{ t: '▣ 즉시 발주', cls: 'go k-order', id: 'oxGo', fn: doOrder },
     { t: '닫기', fn: close }]);
   $('oxVendor').onchange = autoPrice;
   $('oxOdate').onchange  = autoPrice;
   $('oxQty').onchange    = calcAmt;
   $('oxPrice').onchange  = () => { $('oxPrice').dataset.auto = ''; calcAmt(); };
+  /* v154: 중량 수동 입력 — 한 번 고치면 수량을 바꿔도 덮어쓰지 않는다 ([자동]으로 해제) */
+  const w = $('oxWt');
+  if (w) {
+    w.oninput  = () => { w.dataset.manual = '1'; w.classList.add('manual'); };
+    w.onchange = () => { w.dataset.manual = '1'; const v = _n(w.value); w.value = v ? v.toFixed(2) : ''; calcAmt(); };
+    const ab = $('oxWtAuto');
+    if (ab) ab.onclick = () => { w.dataset.manual = ''; calcAmt(); w.focus(); };
+  }
   calcAmt();
   return false;
+}
+
+/* 설계치수(spec) × 수량 → 자동 중량(kg) */
+function autoKg(spec, qty) {
+  try { if (window.MESPRICE && MESPRICE.weightKg) return Number(MESPRICE.weightKg(spec, qty)) || 0; } catch (e) {}
+  return 0;
 }
 
 function calcAmt() {
@@ -393,8 +371,14 @@ function calcAmt() {
   let base = qty;
   if (CFG.useWeight) {
     let kg = 0;
-    try { if (window.MESPRICE && MESPRICE.weightKg) kg = Number(MESPRICE.weightKg(b.spec, qty)) || 0; } catch (e) {}
-    if (w) w.value = kg ? kg.toFixed(2) : '';
+    /* v154: 손으로 넣은 중량이 있으면 자동계산으로 덮어쓰지 않는다 */
+    if (w && w.dataset.manual === '1') {
+      kg = _n(w.value);
+      w.classList.add('manual');
+    } else {
+      kg = autoKg(b.spec, qty);
+      if (w) { w.value = kg ? kg.toFixed(2) : ''; w.classList.remove('manual'); }
+    }
     if (kg) base = kg;
   }
   if (a) a.value = price ? _won(Math.round(price * base)) : '';
@@ -428,17 +412,18 @@ async function doOrder() {
   const qty = Math.max(1, Math.round(_n(_v('oxQty'))));
   const price = _n(_v('oxPrice'));
   const amt = _n(_v('oxAmt'));
+  const wt = CFG.useWeight ? _n(_v('oxWt')) : 0;   /* v154: 자동계산이든 수동입력이든 그대로 저장 */
   const re = _v('oxRe'), remark0 = (_v('oxRemark') || '').trim();
-  const fresh = !!(CTX && CTX.newCycle), rem = fresh ? (Number(b.qty)||0) : remain(b);
+  const rem = remain(b);
 
-  if (!fresh && !re && rem > 0 && qty > rem &&
+  if (!re && rem > 0 && qty > rem &&
       !confirm(`${b.part} 잔량 ${rem} 을(를) 넘는 발주입니다. (자재표 ${Number(b.qty) || 0} / 기발주 ${ordered(b.part)})\n\n그래도 발주할까요?`))
     return say('발주를 취소했습니다. 발주수량을 확인하세요.');
   if (!price &&
       !confirm('단가가 입력되지 않았습니다.\n\n발주금액 0원으로 등록되어 제조원가에 반영되지 않습니다.\n그래도 발주할까요?'))
     return say('단가를 입력한 뒤 다시 발주하세요.');
   /* 같은 품번이 다른 업체로 미입고 발주돼 있으면 중복구매 경고 */
-  const other = fresh ? [] : linesOf(b.part).filter(l => l.status === '발주' && (l.vendor_name || '') !== vendor);
+  const other = linesOf(b.part).filter(l => l.status === '발주' && (l.vendor_name || '') !== vendor);
   if (other.length &&
       !confirm(`${b.part} 은(는) 아래 업체로 이미 발주(미입고)돼 있습니다.\n\n` +
                other.slice(0, 5).map(l => ` · ${l.vendor_name || '(업체미지정)'} ${_dt(l.order_date)} ${Number(l.order_qty) || 0}개`).join('\n') +
@@ -456,13 +441,14 @@ async function doOrder() {
       part_no: b.part, part_name: b.name || null,
       material: b.mat || null, spec: b.spec || null,
       order_qty: qty,
+      order_weight: wt || null,
       unit_price  : price || null,
       quote_price : amt || null,
       confirm_price: amt || null,
       order_date  : _v('oxOdate') || T0(),
       required_date: _v('oxRdate') || null,
       owner_name  : OWNER,
-      remark      : withCycleRemark((re ? `[재발주:${re}]` + (remark0 ? ' ' + remark0 : '') : (remark0 || null)), fresh ? CTX.cycleId : cycleIdFor(b.part)),
+      remark      : (re ? `[재발주:${re}]` + (remark0 ? ' ' + remark0 : '') : (remark0 || null)) || null,
       reorder_reason: re || null
     }]);
     await after(`${b.part} ${b.name || ''} → ${vendor} 발주 ${qty}개 등록 (${_won(amt)}원, 입고요구 ${_v('oxRdate') || '-'})`);
@@ -488,22 +474,45 @@ function formReceive(ev, l) {
     <label>입고수량</label><input id="oxInQty" class="r" value="${rem}" inputmode="numeric">
     <label>입고일</label><input id="oxInDate" type="date" value="${T0()}">
     <label>입고단가</label><input id="oxInPrice" class="r" value="${_won(l.unit_price)}" inputmode="numeric">
+    ${CFG.useWeight
+      ? '<label>중량(kg)</label><span class="wtbox">' +
+        '<input id="oxInWt" class="r" inputmode="decimal" title="발주 중량을 입고수량에 맞춰 환산합니다. 실측 중량이 다르면 직접 고쳐 넣으세요.">' +
+        '<button type="button" id="oxInWtAuto" title="자동환산 값으로 되돌립니다">자동</button></span>'
+      : '<label></label><span></span>'}
     <label>입고금액</label><input id="oxInAmt" class="r" readonly>
-    <label>비고</label><input id="oxInRemark" class="full" placeholder="선택" value="${_esc(cleanCycleRemark(l.remark))}">
+    <label>비고</label><input id="oxInRemark" class="full" placeholder="선택" value="${_esc(l.remark || '')}">
    </div>
-   <div class="note"><b>입고 처리</b>는 「입고」까지만, <b>입고+확정</b>은 매입가 그대로(네고 0%) 입고확정까지 한 번에 끝냅니다. 네고가 필요하면 입고 처리 뒤 다시 우클릭하세요.</div>`,
+   <div class="note"><b>입고 처리</b>는 「입고」까지만, <b>입고+확정</b>은 매입가 그대로(네고 0%) 입고확정까지 한 번에 끝냅니다. 네고가 필요하면 입고 처리 뒤 다시 우클릭하세요.</div>
+   ${CFG.useWeight ? '<div class="note">중량(kg)은 발주 중량을 입고수량만큼 환산해 채웁니다. <b>실측 중량으로 직접 고칠 수 있고</b>, 고친 값이 입고금액(단가×중량)에 쓰입니다.</div>' : ''}`,
    [{ t: '▣ 입고 처리', cls: 'go k-in', id: 'oxGo', fn: () => doReceive(false) },
     { t: '▣ 입고+확정', cls: 'go', id: 'oxGo2', title: '입고 처리와 입고확정(매입가 그대로, 네고 0%)을 한 번에 끝냅니다', fn: () => doReceive(true) },
     { t: '＋ 추가 발주', cls: 'go k-order', title: '같은 품번을 다른 업체에 나눠 발주하거나 재발주합니다', fn: e => formOrder(e) },
-    { t: '↻ 신규발주', cls: 'warn', title: '기존 이력을 남기고 새 발주차수를 시작합니다. 현재 차수가 미완료면 안내 후 실행되지 않습니다.', fn: e => startNewCycle(e) },
     { t: '✖ 발주취소', cls: 'warn', title: '이 발주 라인을 삭제합니다', fn: doOrderCancel },
     { t: '닫기', fn: close }]);
+  /* v154: 입고 중량 — 발주 중량(order_weight)을 입고수량에 맞춰 환산, 없으면 설계치수로 자동계산.
+           수동 입력한 값은 수량을 바꿔도 덮어쓰지 않는다 ([자동]으로 해제) */
+  const inKg = q => {
+    const ow = Number(l.order_weight) || 0;
+    if (ow && ord) return ow / ord * q;
+    return autoKg(CTX.b.spec, q);
+  };
+  const wi = $('oxInWt');
   const f = () => {
     const q = _n(_v('oxInQty')), p = _n(_v('oxInPrice'));
-    const w = CFG.useWeight ? (() => { try { return Number(MESPRICE.weightKg(CTX.b.spec, q)) || 0; } catch (e) { return 0; } })() : 0;
+    let w = 0;
+    if (CFG.useWeight) {
+      if (wi && wi.dataset.manual === '1') { w = _n(wi.value); wi.classList.add('manual'); }
+      else { w = inKg(q); if (wi) { wi.value = w ? w.toFixed(2) : ''; wi.classList.remove('manual'); } }
+    }
     $('oxInPrice').value = p ? _won(p) : '';
     $('oxInAmt').value = _won(Math.round(p * (w || q || 0)));
   };
+  if (wi) {
+    wi.oninput  = () => { wi.dataset.manual = '1'; wi.classList.add('manual'); };
+    wi.onchange = () => { wi.dataset.manual = '1'; const v = _n(wi.value); wi.value = v ? v.toFixed(2) : ''; f(); };
+    const ab = $('oxInWtAuto');
+    if (ab) ab.onclick = () => { wi.dataset.manual = ''; f(); wi.focus(); };
+  }
   $('oxInQty').onchange = f; $('oxInPrice').onchange = f; f();
   return false;
 }
@@ -523,8 +532,9 @@ async function doReceive(withConfirm) {
     const row = {
       line_id: Number(l.line_id), status: '입고',
       receipt_qty: q, receipt_date: _v('oxInDate') || T0(),
+      receipt_weight: (CFG.useWeight ? _n(_v('oxInWt')) : 0) || null,
       unit_price: price || null, receipt_amount: amt || null,
-      remark: withCycleRemark((_v('oxInRemark') || '').trim(), cycleOf(l) || cycleIdFor(b.part)),
+      remark: (_v('oxInRemark') || '').trim() || null,
       updated_at: new Date().toISOString()
     };
     /* v152: 입고+확정 — 매입가(입고금액) 그대로 확정, 네고 0%. 네고가 필요하면 [입고 처리] 뒤 다시 우클릭 */
@@ -569,7 +579,6 @@ function formConfirm(ev, l) {
    <div class="note">확정가가 제조원가(${CFG.category}비)에 반영됩니다. 네고율을 넣으면 확정가가, 확정가를 고치면 네고율이 맞춰집니다.</div>`,
    [{ t: '▣ 입고확정', cls: 'go', id: 'oxGo', fn: doConfirm },
     { t: '＋ 추가 발주', cls: 'go k-order', title: '같은 품번을 다른 업체에 나눠 발주하거나 재발주합니다', fn: e => formOrder(e) },
-    { t: '↻ 신규발주', cls: 'warn', title: '기존 이력을 남기고 새 발주차수를 시작합니다. 현재 차수가 미완료면 안내 후 실행되지 않습니다.', fn: e => startNewCycle(e) },
     { t: '✖ 입고취소', cls: 'warn', title: '입고를 취소하고 발주 상태로 되돌립니다', fn: doReceiveCancel },
     { t: '닫기', fn: close }]);
   $('oxRate').onchange = () => { const q = _n(_v('oxQuote')); $('oxFix').value = _won(Math.round(q * (1 - _n(_v('oxRate')) / 100))); };
@@ -606,7 +615,7 @@ async function doReceiveCancel() {
   try {
     await MESDB.table('order_lines').upsert([{
       line_id: Number(l.line_id), status: '발주',
-      receipt_qty: 0, receipt_date: null, receipt_amount: null,
+      receipt_qty: 0, receipt_date: null, receipt_amount: null, receipt_weight: null,
       updated_at: new Date().toISOString()
     }], 'line_id');
     await after(`${b.part} 입고를 취소했습니다. (발주 상태로 복귀)`);
@@ -624,12 +633,12 @@ function formDone(ev, l) {
     <b>확정일</b><span>${_esc(_dt(l.confirm_date))}</span>
     <b>발주수량</b><span>${Number(l.order_qty) || 0}</span>
     <b>입고수량</b><span>${Number(l.receipt_qty) || 0}</span>
+    ${CFG.useWeight ? `<b>중량(kg)</b><span>발주 ${Number(l.order_weight) || 0} / 입고 ${Number(l.receipt_weight) || 0}</span>` : ''}
     <b>매입가</b><span>${_won(l.receipt_amount || l.quote_price)}원</span>
     <b>네고율</b><span>${Number(l.nego_rate) || 0}%</span>
     <b>확정가</b><span>${_won(l.confirm_price)}원</span></div>
    <div class="note">확정취소를 하면 「입고」 상태로 돌아가 확정가를 다시 잡을 수 있습니다.</div>`,
    [{ t: '＋ 추가 발주', cls: 'go k-order', title: '같은 품번을 다른 업체에 나눠 발주하거나 재발주합니다', fn: e => formOrder(e) },
-    { t: '↻ 신규발주', cls: 'warn', title: '기존 이력을 남기고 소요수량 전체를 기준으로 새 발주차수를 시작합니다', fn: e => startNewCycle(e) },
     { t: '✖ 확정취소', cls: 'warn', fn: doConfirmCancel },
     { t: '닫기', fn: close }]);
   return false;
@@ -733,7 +742,7 @@ function init(opt) {
       const s = document.createElement('span');
       s.className = 'oxhint';
       s.title = '자재표 리스트에서 마우스 오른쪽 버튼(또는 더블클릭)을 누르면 상태에 맞는 처리 창이 열립니다';
-      s.innerHTML = '※ 자재표 <b>우클릭</b> → 발주 · 입고 · 입고확정 · 취소 · 신규발주';
+      s.innerHTML = '※ 자재표 <b>우클릭</b> → 발주 · 입고 · 입고확정 · 취소';
       bar.appendChild(s);
     }
     /* 옛 배치(협력업체리스트·구매요청 리스트·PRINT 발주서) 토글 — 선택은 브라우저에 기억 */
@@ -759,5 +768,5 @@ function init(opt) {
   setTimeout(refresh, 1500);
 }
 
-window.MESORDCTX = { init, refresh, loadLines, partState, close, startNewCycle, activeCycleRows, cycleIdFor, withCycleRemark, newCycleId };
+window.MESORDCTX = { init, refresh, loadLines, partState, close };
 })();
