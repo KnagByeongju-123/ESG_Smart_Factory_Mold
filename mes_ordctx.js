@@ -1,4 +1,4 @@
-/* mes_ordctx.js — v153
+/* mes_ordctx.js — v156
  * ─────────────────────────────────────────────────────────────────────────
  * 원재료 발주 · 구매품 발주 화면에서 「자재표 리스트」 한 줄만 가지고
  * 발주 → 입고 → 입고확정 까지 그 자리에서 끝낸다.
@@ -64,22 +64,44 @@ let CFG = {
   bySize   : true        /* 자재단가 조회 시 두께로 사이즈 매칭 */
 };
 
-/* ── 발주 라인 캐시 : 품번 → order_lines 행 배열 ───────────── */
+/* ── 발주 라인 캐시 : 품번 → 현재 발주차수의 order_lines 행 배열 ── */
 const LINES = new Map();
 let LINES_JOB = '';
+
+/* v156: 원재료/구매품 신규발주 차수.
+   [신규발주:ID]가 처음 기록된 뒤에는 같은 품번의 최신 차수만 현재 진행으로 본다.
+   과거 order_lines 는 삭제/수정하지 않으므로 발주현황의 이력은 그대로 남는다. */
+const CYCLE = new Map();                                      /* 품번 → 현재 차수ID */
+const CYCLE_RE = /\[신규발주:([^\]]+)\]/;
+const cycleKey = p => String(p || '');
+const cycleOf = l => { const m = String(l && l.remark || '').match(CYCLE_RE); return m ? m[1] : ''; };
+const newCycleId = () => { const d=new Date(), z=n=>String(n).padStart(2,'0'); return `N${d.getFullYear()}${z(d.getMonth()+1)}${z(d.getDate())}${z(d.getHours())}${z(d.getMinutes())}${z(d.getSeconds())}-${String(Date.now()).slice(-4)}`; };
+function withCycleRemark(remark, id) {
+  let r = String(remark || '').trim().replace(CYCLE_RE, '').trim();
+  return id ? `[신규발주:${id}]${r ? ' ' + r : ''}` : (r || null);
+}
+function activeCycleRows(rows, remember=true) {
+  const a = (rows || []).slice().sort((x,y)=>(Number(x.line_id)||0)-(Number(y.line_id)||0));
+  const latest = new Map();
+  a.forEach(l => { const id=cycleOf(l); if(id) latest.set(cycleKey(l.part_no), id); });
+  if (remember) { CYCLE.clear(); latest.forEach((id,k)=>CYCLE.set(k,id)); }
+  return a.filter(l => { const id=latest.get(cycleKey(l.part_no)); return !id || cycleOf(l)===id; });
+}
+const cycleIdFor = p => CYCLE.get(cycleKey(p)) || '';
+const cleanCycleRemark = remark => String(remark || '').replace(CYCLE_RE, '').trim();
 
 /* v142: 조회가 겹쳐도 같은 발주가 두세 번 쌓이지 않게 한다.
    (처리 후 refresh 와 onChange 알림이 동시에 돌던 문제 — 결과는 지역 Map 에 담고 마지막 호출만 반영) */
 let _seq = 0;
 async function loadLines(job) {
   const my = ++_seq;
-  if (!job || !_online()) { LINES.clear(); LINES_JOB = job || ''; return; }
+  if (!job || !_online()) { LINES.clear(); CYCLE.clear(); LINES_JOB = job || ''; return; }
   const out = new Map();
   try {
     const rs = await MESDB.table('order_lines').select(
       `select=*&category=eq.${encodeURIComponent(CFG.category)}` +
       `&job_no=eq.${encodeURIComponent(job)}&order=line_id`, { fresh: true });
-    (rs || []).forEach(r => {
+    activeCycleRows(rs || [], true).forEach(r => {
       const k = r.part_no || '';
       const a = out.get(k) || []; a.push(r); out.set(k, a);
     });
@@ -268,10 +290,34 @@ function openPart(ev, idx) {
 
 const headHtml = () => {
   const { b, job } = CTX;
+  const fresh = !!(CTX && CTX.newCycle), oq = fresh ? 0 : ordered(b.part), rem = fresh ? (Number(b.qty)||0) : remain(b);
   return `<div class="sub"><b>${_esc(job.job)}</b> · ${_esc(b.part)} ${_esc(b.name || '')}` +
          `${b.mat ? ' · ' + _esc(b.mat) : ''}${b.spec ? ' · ' + _esc(b.spec) : ''}` +
-         ` · 자재표 수량 <b>${Number(b.qty) || 0}</b> / 기발주 ${ordered(b.part)} / 잔량 <b>${remain(b)}</b></div>`;
+         ` · 자재표 수량 <b>${Number(b.qty) || 0}</b> / 현재차수 기발주 ${oq} / 잔량 <b>${rem}</b></div>`;
 };
+
+/* v156: 현재 차수가 모두 입고확정된 품번만 신규발주 가능. 기존 이력은 남고 새 차수는 소요수량 전체에서 다시 시작한다. */
+function startNewCycle(ev) {
+  if (!CTX || !CTX.b) return false;
+  const { b } = CTX, a = linesOf(b.part).filter(l => ['발주','입고','입고확정'].includes(String(l.status||'')));
+  if (!a.length) { say(`${b.part} 기존 발주 이력이 없습니다. 일반 발주를 이용하세요.`); return false; }
+  const openRows = a.filter(l => String(l.status||'') !== '입고확정');
+  if (openRows.length) {
+    const st = [...new Set(openRows.map(l=>l.status||'미완료'))].join(', ');
+    say(`${b.part} 현재 차수가 아직 완료되지 않았습니다 (${st}). 모든 발주건을 입고확정한 뒤 신규발주하세요.`);
+    return false;
+  }
+  if (!confirm(`${b.part} ${b.name||''}의 현재 발주 진행을 이전 차수로 남기고 신규발주를 시작합니다.
+
+· 기존 발주/입고/확정 이력은 삭제하거나 수정하지 않습니다.
+· 새 차수의 발주수량은 소요수량 ${Number(b.qty)||0}부터 다시 계산합니다.
+· 첫 발주를 실제 등록하면 신규 차수가 확정됩니다.
+
+계속할까요?`)) return false;
+  CTX.line = null; CTX.newCycle = true; CTX.cycleId = newCycleId();
+  const pos = ev && ev.clientX != null ? ev : {clientX:Math.max(20,Math.round(innerWidth*.42)),clientY:Math.max(60,Math.round(innerHeight*.28))};
+  return formOrder(pos);
+}
 
 /* ── 발주가 여러 건인 품번 : 내역 목록 ─────────────────────── */
 function listLines(ev) {
@@ -292,6 +338,7 @@ function listLines(ev) {
      <tbody id="oxLn">${rows}</tbody></table>
      <div class="note">줄을 클릭하면 그 발주건의 <b>입고 / 입고확정 / 취소</b> 창이 열립니다.</div>`,
     [{ t: '＋ 추가 발주', cls: 'go k-order', fn: e => formOrder(e) },
+     { t: '↻ 신규발주', cls: 'warn', title: '현재 차수가 모두 완료된 뒤 기존 이력을 남기고 새 발주차수로 다시 시작합니다', fn: e => startNewCycle(e) },
      { t: '닫기', fn: close }]);
   $('oxLn').querySelectorAll('tr').forEach(tr => {
     tr.onclick = e => formLine(e, a[Number(tr.dataset.k)]);
@@ -311,7 +358,7 @@ function formLine(ev, l) {
 function formOrder(ev) {
   const { b, job } = CTX;
   const vs = vendorList();
-  const rem = remain(b) || Number(b.qty) || 1;
+  const rem = (CTX && CTX.newCycle) ? (Number(b.qty) || 1) : (remain(b) || Number(b.qty) || 1);
   const rd = (() => { try { return $('reqDate').value || T0(); } catch (e) { return T0(); } })();
   open(ev, `${b.part} — 발주`, 'k-order', headHtml() + `
    <div class="g">
@@ -326,6 +373,7 @@ function formOrder(ev) {
     <label>재발주</label><select id="oxRe"><option value="">(정상 발주)</option><option>불량</option><option>실수</option><option>예비품</option><option>기타</option></select>
     <label>비고</label><input id="oxRemark" placeholder="선택">
    </div>
+   ${(CTX && CTX.newCycle) ? `<div class="note" style="border-color:#e5ad62;background:#fff7ea;color:#8a4f08"><b>신규발주</b> — 기존 이력은 이전 차수로 그대로 남고, 이 발주부터 소요수량 전체를 기준으로 새 차수가 시작됩니다.</div>` : ''}
    <div class="note" id="oxNote">업체를 고르면 단가변동등록에서 발주일 기준 단가를 자동 조회합니다. 이력이 없으면 직접 입력하세요.</div>`,
    [{ t: '▣ 즉시 발주', cls: 'go k-order', id: 'oxGo', fn: doOrder },
     { t: '닫기', fn: close }]);
@@ -381,16 +429,16 @@ async function doOrder() {
   const price = _n(_v('oxPrice'));
   const amt = _n(_v('oxAmt'));
   const re = _v('oxRe'), remark0 = (_v('oxRemark') || '').trim();
-  const rem = remain(b);
+  const fresh = !!(CTX && CTX.newCycle), rem = fresh ? (Number(b.qty)||0) : remain(b);
 
-  if (!re && rem > 0 && qty > rem &&
+  if (!fresh && !re && rem > 0 && qty > rem &&
       !confirm(`${b.part} 잔량 ${rem} 을(를) 넘는 발주입니다. (자재표 ${Number(b.qty) || 0} / 기발주 ${ordered(b.part)})\n\n그래도 발주할까요?`))
     return say('발주를 취소했습니다. 발주수량을 확인하세요.');
   if (!price &&
       !confirm('단가가 입력되지 않았습니다.\n\n발주금액 0원으로 등록되어 제조원가에 반영되지 않습니다.\n그래도 발주할까요?'))
     return say('단가를 입력한 뒤 다시 발주하세요.');
   /* 같은 품번이 다른 업체로 미입고 발주돼 있으면 중복구매 경고 */
-  const other = linesOf(b.part).filter(l => l.status === '발주' && (l.vendor_name || '') !== vendor);
+  const other = fresh ? [] : linesOf(b.part).filter(l => l.status === '발주' && (l.vendor_name || '') !== vendor);
   if (other.length &&
       !confirm(`${b.part} 은(는) 아래 업체로 이미 발주(미입고)돼 있습니다.\n\n` +
                other.slice(0, 5).map(l => ` · ${l.vendor_name || '(업체미지정)'} ${_dt(l.order_date)} ${Number(l.order_qty) || 0}개`).join('\n') +
@@ -414,7 +462,7 @@ async function doOrder() {
       order_date  : _v('oxOdate') || T0(),
       required_date: _v('oxRdate') || null,
       owner_name  : OWNER,
-      remark      : (re ? `[재발주:${re}]` + (remark0 ? ' ' + remark0 : '') : (remark0 || null)) || null,
+      remark      : withCycleRemark((re ? `[재발주:${re}]` + (remark0 ? ' ' + remark0 : '') : (remark0 || null)), fresh ? CTX.cycleId : cycleIdFor(b.part)),
       reorder_reason: re || null
     }]);
     await after(`${b.part} ${b.name || ''} → ${vendor} 발주 ${qty}개 등록 (${_won(amt)}원, 입고요구 ${_v('oxRdate') || '-'})`);
@@ -441,7 +489,7 @@ function formReceive(ev, l) {
     <label>입고일</label><input id="oxInDate" type="date" value="${T0()}">
     <label>입고단가</label><input id="oxInPrice" class="r" value="${_won(l.unit_price)}" inputmode="numeric">
     <label>입고금액</label><input id="oxInAmt" class="r" readonly>
-    <label>비고</label><input id="oxInRemark" class="full" placeholder="선택" value="${_esc(l.remark || '')}">
+    <label>비고</label><input id="oxInRemark" class="full" placeholder="선택" value="${_esc(cleanCycleRemark(l.remark))}">
    </div>
    <div class="note"><b>입고 처리</b>는 「입고」까지만, <b>입고+확정</b>은 매입가 그대로(네고 0%) 입고확정까지 한 번에 끝냅니다. 네고가 필요하면 입고 처리 뒤 다시 우클릭하세요.</div>`,
    [{ t: '▣ 입고 처리', cls: 'go k-in', id: 'oxGo', fn: () => doReceive(false) },
@@ -475,7 +523,7 @@ async function doReceive(withConfirm) {
       line_id: Number(l.line_id), status: '입고',
       receipt_qty: q, receipt_date: _v('oxInDate') || T0(),
       unit_price: price || null, receipt_amount: amt || null,
-      remark: (_v('oxInRemark') || '').trim() || null,
+      remark: withCycleRemark((_v('oxInRemark') || '').trim(), cycleOf(l) || cycleIdFor(b.part)),
       updated_at: new Date().toISOString()
     };
     /* v152: 입고+확정 — 매입가(입고금액) 그대로 확정, 네고 0%. 네고가 필요하면 [입고 처리] 뒤 다시 우클릭 */
@@ -579,6 +627,7 @@ function formDone(ev, l) {
     <b>확정가</b><span>${_won(l.confirm_price)}원</span></div>
    <div class="note">확정취소를 하면 「입고」 상태로 돌아가 확정가를 다시 잡을 수 있습니다.</div>`,
    [{ t: '＋ 추가 발주', cls: 'go k-order', title: '같은 품번을 다른 업체에 나눠 발주하거나 재발주합니다', fn: e => formOrder(e) },
+    { t: '↻ 신규발주', cls: 'warn', title: '기존 이력을 남기고 소요수량 전체를 기준으로 새 발주차수를 시작합니다', fn: e => startNewCycle(e) },
     { t: '✖ 확정취소', cls: 'warn', fn: doConfirmCancel },
     { t: '닫기', fn: close }]);
   return false;
@@ -682,7 +731,7 @@ function init(opt) {
       const s = document.createElement('span');
       s.className = 'oxhint';
       s.title = '자재표 리스트에서 마우스 오른쪽 버튼(또는 더블클릭)을 누르면 상태에 맞는 처리 창이 열립니다';
-      s.innerHTML = '※ 자재표 <b>우클릭</b> → 발주 · 입고 · 입고확정 · 취소';
+      s.innerHTML = '※ 자재표 <b>우클릭</b> → 발주 · 입고 · 입고확정 · 취소 · 신규발주';
       bar.appendChild(s);
     }
     /* 옛 배치(협력업체리스트·구매요청 리스트·PRINT 발주서) 토글 — 선택은 브라우저에 기억 */
@@ -708,5 +757,5 @@ function init(opt) {
   setTimeout(refresh, 1500);
 }
 
-window.MESORDCTX = { init, refresh, loadLines, partState, close };
+window.MESORDCTX = { init, refresh, loadLines, partState, close, startNewCycle, activeCycleRows, cycleIdFor, withCycleRemark, newCycleId };
 })();
