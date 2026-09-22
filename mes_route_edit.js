@@ -1,4 +1,4 @@
-/* mes_route_edit.js — v147
+/* mes_route_edit.js — v150
  * ─────────────────────────────────────────────────────────────────────────
  * 외주가공 발주 화면에서 가공계획(부품별 가공공정)을 바로 고친다.
  *
@@ -6,7 +6,7 @@
  *     · 기준공정 고르기 → [적용]        : 그 기준공정의 공정으로 바꾼다
  *     · 공정 추가 / 삭제 / ↑↓ 순서 바꾸기 / 공정 드롭다운으로 교체
  *     · 사내 ☑                          : 사내가공 — 발주 대상에서 빠지고 순서 판정에서 건너뛴다
- *     · [▣ 가공계획 저장]                : machining_plan_parts 에 저장 (가공계획등록 화면과 같은 곳)
+ *     · [▣ 가공계획 적용]                : machining_plan_parts 에 저장하여 해당 부품에 적용
  *     · [기준공정으로 저장]              : 새 기준공정으로, 또는 고른 기준공정을 덮어쓴다
  *                                         (machining_standard_routes + 기준정보 마스터)
  *   이미 발주된 공정(요청·출고·입고·완료)은 잠겨서 바꾸거나 지울 수 없다.
@@ -105,8 +105,8 @@ function body() {
    <div class="note" id="rtNote"></div>`;
 }
 function foot() {
-  return `<button class="btn go" type="button" onclick="MESROUTE.savePlan()" title="이 부품의 공정을 가공계획(machining_plan_parts)에 저장합니다">▣ 가공계획 저장</button>
-   <button class="btn" type="button" onclick="MESROUTE.saveStd()" title="지금 공정 구성을 기준공정으로 저장합니다 (새로 만들거나 고른 기준공정을 덮어쓰기)">기준공정으로 저장</button>
+  return `<button class="btn go" type="button" onclick="MESROUTE.savePlan()" title="이 부품의 공정을 가공계획에 저장하여 적용합니다. 기준공정 칸에 직접 입력한 이름도 함께 저장됩니다.">▣ 가공계획 적용</button>
+   <button class="btn" type="button" onclick="MESROUTE.saveStd()" title="지금 공정 구성을 기준공정으로 저장합니다. 새 이름을 직접 입력하면 다른 이름으로 신규 저장됩니다.">기준공정 저장</button>
    <button class="btn" type="button" onclick="ctxClose()">닫기</button>`;
 }
 /* 기준공정 이름 → 등록된 기준공정 찾기 (「2. 기본2」 처럼 번호가 붙어 있어도 찾는다) */
@@ -114,7 +114,7 @@ const stdLabel = s => `${s.no}. ${s.name || autoName(s.steps.map(c => ({ code: c
 function stdFind(txt) {
   const t = String(txt || '').trim(); if (!t) return null;
   return STD.find(s => stdLabel(s) === t) || STD.find(s => (s.name || '').trim() === t)
-      || STD.find(s => String(s.no) === t.replace(/\..*$/, '').trim() && /^\d+\s*\./.test(t)) || null;
+      || STD.find(s => /^\d+$/.test(t) && String(s.no) === t) || null;
 }
 function fillStd() {
   const el = document.getElementById('rtStd'); if (!el || !E) return;
@@ -154,7 +154,7 @@ function paint() {
   const note = document.getElementById('rtNote');
   if (note) note.innerHTML = (locked ? `이미 발주된 ${locked}개 공정은 잠겨 있습니다 (취소하려면 그 칸을 우클릭 → 발주취소). ` : '') +
     (house ? `사내가공 ${house}개는 외주 발주 대상에서 빠지고 순서 판정에서 건너뜁니다. ` : '') +
-    '기준공정을 고르면 <b>바로</b> 바뀝니다. 새 이름을 쳐 넣고 [기준공정으로 저장] 하면 다른 이름으로 저장됩니다. 고친 뒤 <b>[▣ 가공계획 저장]</b>을 눌러야 이 부품에 반영됩니다.';
+    '기준공정을 고르면 <b>바로</b> 바뀝니다. 새 이름을 직접 입력할 수 있고, [기준공정 저장]을 누르면 그 이름으로 새 기준공정이 만들어집니다. 고친 뒤 <b>[▣ 가공계획 적용]</b>을 누르면 입력한 기준공정 이름과 공정 구성이 이 부품에 반영됩니다.';
 }
 
 /* ── 편집 동작 ────────────────────────────────────────────── */
@@ -188,7 +188,7 @@ function applyStd(pick) {
   const rest = s.steps.map((c, i) => ({ code: c, house: !!s.inhouse[i], lock: false, st: '' }));
   E.steps = keep.concat(rest).slice(0, MAXN);
   E.r.stdName = s.name; E.stdName = s.name;
-  paint(); say(`기준공정 ${s.no} (${s.name}) 적용 — ${E.steps.map(x => pn(x.code) + (x.house ? '[사내]' : '')).join(' → ')} · [▣ 가공계획 저장]으로 확정하세요.`);
+  paint(); say(`기준공정 ${s.no} (${s.name}) 적용 — ${E.steps.map(x => pn(x.code) + (x.house ? '[사내]' : '')).join(' → ')} · [▣ 가공계획 적용]으로 확정하세요.`);
 }
 
 /* ── 저장 : 가공계획 ─────────────────────────────────────── */
@@ -202,10 +202,17 @@ async function savePlan() {
   if (!E) return; const steps = collect(); if (!steps) return;
   if (!online()) return say('DB 미연결 - 저장할 수 없습니다.');
   const { r, job } = E; const jo = String(r.jo || job.proc || '1');
+  /* v150: 기준공정 칸은 목록 선택 + 직접 텍스트 입력을 모두 허용한다.
+     가공계획 적용 시에도 현재 보이는 입력값을 standard_process 에 그대로 반영한다.
+     단, 등록된 기준공정을 목록에서 고른 경우에는 화면 라벨(예: "2. 기본2")이 아니라 실제 이름만 저장한다. */
+  const stdEl = document.getElementById('rtStd'), stdBox = stdEl && stdEl.__mescbBox;
+  const typed = String((stdBox ? stdBox.inp.value : (stdEl && stdEl.value)) || '').trim();
+  const typedHit = stdFind(typed);
   const stdSel = STD.find(x => String(x.no) === String(E.stdNo));
+  const planStdName = ((typedHit && typedHit.name) || typed || (stdSel && stdSel.name) || E.stdName || r.stdName || '').trim() || null;
   const base = { job_no: job.job, process_code: jo, part_no: r.part, part_name: r.name || null,
     qty: (r.qty != null ? Number(r.qty) : 1),
-    standard_process: (stdSel && stdSel.name) || r.stdName || null,
+    standard_process: planStdName,
     steps: steps.map(x => x.code), inhouse: steps.map(x => !!x.house) };
   try {
     /* 가공계획 머리(machining_plans)가 없으면 만든다 — 가공계획등록 화면과 같은 규칙 */
@@ -217,9 +224,9 @@ async function savePlan() {
     try { MESDB.notify && MESDB.notify(['machining_plan_parts', 'machining_plans']); } catch (e) {}
     ctxClose();
     await loadRoutes();
-    const txt = `${r.part} 가공계획 저장 — 공정 ${steps.length}개 (${steps.map(x => pn(x.code) + (x.house ? '[사내]' : '')).join(' → ')})`;
-    say(txt); try { (window.MESPOP || window.parent?.MESPOP)?.ok(txt, '가공계획 저장'); } catch (e) {}
-  } catch (e) { say('가공계획 저장 실패: ' + String(e.message || e).slice(0, 140)); }
+    const txt = `${r.part} 가공계획 적용 — 기준공정 ${planStdName || '-'} · 공정 ${steps.length}개 (${steps.map(x => pn(x.code) + (x.house ? '[사내]' : '')).join(' → ')})`;
+    say(txt); try { (window.MESPOP || window.parent?.MESPOP)?.ok(txt, '가공계획 적용'); } catch (e) {}
+  } catch (e) { say('가공계획 적용 실패: ' + String(e.message || e).slice(0, 140)); }
 }
 
 /* ── 저장 : 기준공정 ─────────────────────────────────────── */
@@ -256,7 +263,7 @@ async function saveStd() {
     try { MESDB.dropCache && MESDB.dropCache('machining_standard_routes'); } catch (e) {}
     await loadStd();
     E.stdNo = String(id); E.applied = String(id); E.stdName = name; E.r.stdName = name; fillStd();
-    say(`기준공정 ${id} (${name}) ${over ? '덮어쓰기' : '새로 저장'} — 기준공정관리에도 반영됩니다. 이 부품에 쓰려면 [▣ 가공계획 저장]도 누르세요.`);
+    say(`기준공정 ${id} (${name}) ${over ? '덮어쓰기' : '다른 이름으로 새로 저장'} — 기준공정관리에도 반영됩니다. 이 부품에 쓰려면 [▣ 가공계획 적용]도 누르세요.`);
   } catch (e) { say('기준공정 저장 실패: ' + String(e.message || e).slice(0, 140)); }
 }
 

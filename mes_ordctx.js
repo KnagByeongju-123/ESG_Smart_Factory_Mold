@@ -1,4 +1,4 @@
-/* mes_ordctx.js — v142
+/* mes_ordctx.js — v153
  * ─────────────────────────────────────────────────────────────────────────
  * 원재료 발주 · 구매품 발주 화면에서 「자재표 리스트」 한 줄만 가지고
  * 발주 → 입고 → 입고확정 까지 그 자리에서 끝낸다.
@@ -128,7 +128,7 @@ function ensureUI() {
 #oxPop{position:fixed;z-index:9001;width:430px;max-width:96vw;background:#fff;border:1px solid #6f8090;
  box-shadow:0 8px 26px rgba(0,0,0,.28);display:none;font:12px/1.5 "Malgun Gothic","맑은 고딕",Arial,sans-serif;color:#22303a}
 #oxPop.on{display:block}
-#oxPop .ch{display:flex;align-items:center;gap:8px;padding:0 8px 0 11px;height:31px;color:#fff;font-weight:700;background:linear-gradient(#5f7f9f,#3f5f7d)}
+#oxPop .ch{display:flex;align-items:center;gap:8px;padding:0 8px 0 11px;height:31px;color:#fff;font-weight:700;background:linear-gradient(#5f7f9f,#3f5f7d);cursor:move;user-select:none;touch-action:none}
 #oxPop .ch.k-order{background:linear-gradient(#5e9e46,#3f7a2c)}
 #oxPop .ch.k-in{background:linear-gradient(#e08a2b,#b8681a)}
 #oxPop .ch.k-cfm{background:linear-gradient(#3f7fc4,#2a5d95)}
@@ -190,6 +190,35 @@ body.ox-classic #oxToggle{background:linear-gradient(#f9ffff,#d2e7f6);color:#1e5
                 '<div class="cb" id="oxBody"></div><div class="cf" id="oxFoot"></div>';
   document.body.appendChild(mask); document.body.appendChild(p);
   p.querySelector('.ch .x').onclick = close;
+  /* v153: 원재료/구매품 처리창 — 제목바를 잡고 화면 안에서 드래그 이동 */
+  const head = $('oxHead');
+  if (head && !head.__mesDrag) {
+    head.__mesDrag = 1;
+    let d = null;
+    head.addEventListener('pointerdown', e => {
+      if (e.button != null && e.button !== 0) return;
+      if (e.target.closest('button,.x')) return;
+      const r = p.getBoundingClientRect();
+      d = { id:e.pointerId, x:e.clientX, y:e.clientY, l:r.left, t:r.top, w:r.width, h:r.height };
+      try { head.setPointerCapture(e.pointerId); } catch (x) {}
+      e.preventDefault();
+    });
+    head.addEventListener('pointermove', e => {
+      if (!d || (e.pointerId != null && e.pointerId !== d.id)) return;
+      const nx = Math.max(4, Math.min(window.innerWidth  - d.w - 4, d.l + e.clientX - d.x));
+      const ny = Math.max(4, Math.min(window.innerHeight - d.h - 4, d.t + e.clientY - d.y));
+      p.style.right = 'auto'; p.style.bottom = 'auto';
+      p.style.left = nx + 'px'; p.style.top = ny + 'px';
+      e.preventDefault();
+    });
+    const stop = e => {
+      if (!d || (e.pointerId != null && e.pointerId !== d.id)) return;
+      try { head.releasePointerCapture(d.id); } catch (x) {}
+      d = null;
+    };
+    head.addEventListener('pointerup', stop);
+    head.addEventListener('pointercancel', stop);
+  }
   document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
 }
 
