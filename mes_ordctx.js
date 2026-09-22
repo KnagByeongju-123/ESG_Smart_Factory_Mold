@@ -414,8 +414,9 @@ function formReceive(ev, l) {
     <label>입고금액</label><input id="oxInAmt" class="r" readonly>
     <label>비고</label><input id="oxInRemark" class="full" placeholder="선택" value="${_esc(l.remark || '')}">
    </div>
-   <div class="note">입고 처리하면 「입고」 상태가 되고, 다시 우클릭하면 <b>입고확정</b>(네고·확정가) 창이 열립니다.</div>`,
-   [{ t: '▣ 입고 처리', cls: 'go k-in', id: 'oxGo', fn: doReceive },
+   <div class="note"><b>입고 처리</b>는 「입고」까지만, <b>입고+확정</b>은 매입가 그대로(네고 0%) 입고확정까지 한 번에 끝냅니다. 네고가 필요하면 입고 처리 뒤 다시 우클릭하세요.</div>`,
+   [{ t: '▣ 입고 처리', cls: 'go k-in', id: 'oxGo', fn: () => doReceive(false) },
+    { t: '▣ 입고+확정', cls: 'go', id: 'oxGo2', title: '입고 처리와 입고확정(매입가 그대로, 네고 0%)을 한 번에 끝냅니다', fn: () => doReceive(true) },
     { t: '＋ 추가 발주', cls: 'go k-order', title: '같은 품번을 다른 업체에 나눠 발주하거나 재발주합니다', fn: e => formOrder(e) },
     { t: '✖ 발주취소', cls: 'warn', title: '이 발주 라인을 삭제합니다', fn: doOrderCancel },
     { t: '닫기', fn: close }]);
@@ -429,7 +430,7 @@ function formReceive(ev, l) {
   return false;
 }
 
-async function doReceive() {
+async function doReceive(withConfirm) {
   const { b, line: l } = CTX;
   if (!l || !l.line_id) return say('발주 라인을 찾을 수 없습니다. 다시 조회하세요.');
   if (!_online()) return say('DB 미연결 - 입고 처리를 할 수 없습니다.');
@@ -438,19 +439,25 @@ async function doReceive() {
   const ord = Number(l.order_qty) || 0;
   if (ord && q > ord && !confirm(`발주수량 ${ord} 보다 많습니다. 그래도 입고 처리할까요?`)) return;
   const price = _n(_v('oxInPrice')), amt = _n(_v('oxInAmt'));
-  const btn = $('oxGo'); if (btn) { btn.disabled = true; btn.textContent = '처리 중…'; }
+  const btn = $(withConfirm ? 'oxGo2' : 'oxGo'), b0 = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '처리 중…'; }
   try {
-    await MESDB.table('order_lines').upsert([{
+    const row = {
       line_id: Number(l.line_id), status: '입고',
       receipt_qty: q, receipt_date: _v('oxInDate') || T0(),
       unit_price: price || null, receipt_amount: amt || null,
       remark: (_v('oxInRemark') || '').trim() || null,
       updated_at: new Date().toISOString()
-    }], 'line_id');
-    await after(`${b.part} ${l.vendor_name || ''} 입고 ${q}개 처리 — 입고확정(네고·확정가)은 다시 우클릭하세요.`);
+    };
+    /* v152: 입고+확정 — 매입가(입고금액) 그대로 확정, 네고 0%. 네고가 필요하면 [입고 처리] 뒤 다시 우클릭 */
+    if (withConfirm) { row.status = '입고확정'; row.confirm_date = row.receipt_date; row.confirm_price = amt || _n(l.quote_price) || null; row.nego_rate = 0; }
+    await MESDB.table('order_lines').upsert([row], 'line_id');
+    await after(withConfirm
+      ? `${b.part} ${l.vendor_name || ''} 입고 ${q}개 + 입고확정 (확정가 ${_won(row.confirm_price)}원, 네고 0%) — 제조원가에 반영됩니다.`
+      : `${b.part} ${l.vendor_name || ''} 입고 ${q}개 처리 — 입고확정(네고·확정가)은 다시 우클릭하세요.`);
   } catch (e) {
     say('입고 실패: ' + String(e.message || e).slice(0, 120));
-    if (btn) { btn.disabled = false; btn.textContent = '▣ 입고 처리'; }
+    if (btn) { btn.disabled = false; btn.textContent = b0; }
   }
 }
 

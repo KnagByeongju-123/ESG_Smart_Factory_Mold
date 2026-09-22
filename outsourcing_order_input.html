@@ -656,10 +656,12 @@ function ctxReceive(ev,head){
    <label></label><label class="chk"><input type="checkbox" id="cxShort" style="width:auto;height:auto"> 잔량은 입고하지 않음 (부족분 마감)</label>
    <label>비고</label><input id="cxInRemark" class="full" placeholder="선택">
   </div>`,
-  `<button class="btn go k-in" id="cxGo" onclick="ctxReceiveNow()">▣ 입고 처리</button><button class="btn" onclick="ctxClose()">취소</button>`);
+  `<button class="btn go k-in" id="cxGo" onclick="ctxReceiveNow(false)">▣ 입고 처리</button>
+   <button class="btn go" id="cxGo2" onclick="ctxReceiveNow(true)" title="입고 처리와 입고확정(견적가 그대로, 네고 0%)을 한 번에 끝냅니다. 잔량이 남으면 입고만 됩니다">▣ 입고+확정</button>
+   <button class="btn" onclick="ctxClose()">닫기</button>`);
  return false;
 }
-async function ctxReceiveNow(){
+async function ctxReceiveNow(withConfirm){
  const {r,i,c,o,job}=CTX;const l=o.line||{};
  if(!l.line_id)return msg('발주 라인을 찾을 수 없습니다. [새로고침] 후 다시 시도하세요.');
  if(!_online())return msg('DB 미연결 - 입고 처리를 할 수 없습니다.');
@@ -667,11 +669,22 @@ async function ctxReceiveNow(){
  if(!(q>0))return msg('입고수량을 입력하세요.');
  if(q>rem)return msg(`잔량 ${rem}을 초과했습니다.`);
  const rest=Math.max(rem-q,0),short=document.getElementById('cxShort').checked&&rest>0?rest:0;
- const b=document.getElementById('cxGo');if(b){b.disabled=true;b.textContent='처리 중…'}
+ const b=document.getElementById(withConfirm?'cxGo2':'cxGo'),b0=b?b.textContent:'';if(b){b.disabled=true;b.textContent='처리 중…'}
  try{
-  await ospRpc('fn_osp_receive',{p_line_id:Number(l.line_id),p_qty:q,p_date:_v('cxInDate')||T0(),p_short:short,p_source:'발주화면',p_remark:_v('cxInRemark')||null});
-  await ctxAfter(job.job,`${r.part} 공정${i+1} ${procName(c)} 입고 ${q}개${rest&&!short?` (잔량 ${rest} 대기)`:''} — 다음 공정을 바로 발주할 수 있습니다. 입고확정(전표)은 이 칸을 다시 우클릭해 나중에 처리하세요.`);
- }catch(e){msg('입고 실패: '+String(e.message||e).slice(0,120));if(b){b.disabled=false;b.textContent='▣ 입고 처리'}}
+  const d=_v('cxInDate')||T0();
+  const res=await ospRpc('fn_osp_receive',{p_line_id:Number(l.line_id),p_qty:q,p_date:d,p_short:short,p_source:'발주화면',p_remark:_v('cxInRemark')||null});
+  /* v152: 입고+확정 — 전량 입고(잔량 0 또는 잔량 마감)일 때만 확정한다. 견적가 그대로, 네고 0% */
+  const closed=(res&&typeof res.closed==='boolean')?res.closed:(rest===0||short>0);
+  if(withConfirm&&closed){
+   const quote=_n(l.quote_price);
+   await MESDB.table('order_lines').upsert([{line_id:Number(l.line_id),status:'입고확정',confirm_date:d,confirm_price:quote||null,nego_rate:0,updated_at:new Date().toISOString()}],'line_id');
+   await ctxAfter(job.job,`${r.part} 공정${i+1} ${procName(c)} 입고 ${q}개 + 입고확정 (확정가 ${_won(quote)}원, 네고 0%) — 제조원가에 반영됩니다. 다음 공정을 바로 발주할 수 있습니다.`);
+  }else{
+   await ctxAfter(job.job,`${r.part} 공정${i+1} ${procName(c)} 입고 ${q}개${rest&&!short?` (잔량 ${rest} 대기)`:''}`+
+    (withConfirm?` — 잔량이 남아 <b>입고만</b> 처리했습니다. 잔량을 입고하거나 「잔량은 입고하지 않음」을 체크하면 확정됩니다.`.replace(/<\/?b>/g,'')
+                :` — 다음 공정을 바로 발주할 수 있습니다. 입고확정(전표)은 이 칸을 다시 우클릭해 나중에 처리하세요.`));
+  }
+ }catch(e){msg('입고 실패: '+String(e.message||e).slice(0,120));if(b){b.disabled=false;b.textContent=b0}}
 }
 
 /* ── 입고확정 ── */
