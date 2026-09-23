@@ -219,7 +219,7 @@ a.menu-off,a.menu-off:hover{color:#9aa5ae!important;opacity:.55;cursor:not-allow
 </div>
 
 <script>
-const APP_VER='154';
+const APP_VER='177';
 const APP={
   '영업관리':{
     secondary:[
@@ -263,7 +263,7 @@ const APP={
       ],
       '가공':[
         {name:'가공',items:['가공계획등록','공정이력카드']},
-        {name:'외주가공',items:['외주가공 발주','외주가공 입고','외주가공 입고확정','외주가공 QR스캔']},
+        {name:'외주가공',items:['사내외가공 발주','외주가공 입고','외주가공 입고확정','외주가공 QR스캔']},
         {name:'현황',items:['외주가공발주현황','외주가공 진척현황']}
       ]
     }
@@ -275,7 +275,7 @@ const APP={
     ],
     menus:{
       '사내조립':[{name:'사내조립',items:['조립실적등록','조립실적현황','조립실적조회']}],
-      '검사':[{name:'검사',items:['검사실적등록']}]
+      '검사':[{name:'검사',items:['검사실적등록','검사결과 상세']}]
     }
   },
   '원가관리':{
@@ -284,7 +284,7 @@ const APP={
       {name:'매입매출현황',icon:'▥'}
     ],
     menus:{
-      '원가관리':[{name:'제조원가',items:['제조원가조회(실시간)']}],
+      '원가관리':[{name:'제조원가',items:['제조원가조회(실시간)','금형원가(내역)','금형원가 내역(부품별)','업체별 가공비 합계']}],
       '매입매출현황':[{name:'매입매출현황',items:['매입현황','매출현황','재고조회']}]
     }
   },
@@ -350,7 +350,7 @@ const APP={
         {name:'공지사항',items:['공지사항 등록']},
         {name:'시스템',items:['DB 동기화','에러로그']},
         {name:'인사',items:['부서정보','직급정보']},
-        {name:'단가관리',items:['자재단가변동등록','자재단가변동현황','공정단가변동등록','공정단가변동현황']}
+        {name:'단가관리',items:['자재단가변동등록','자재단가변동현황','공정단가변동등록','공정단가변동현황','작업단가']}
       ]
     }
   }
@@ -376,7 +376,8 @@ const pageRegistry={
 '금형코드 매칭':{id:'mold_code_matching',file:'mold_code_matching.html',title:'금형코드 매칭'},
 '직급정보':{id:'position_info',file:'position_info.html',title:'직급정보'},
 '검사구분':{id:'inspection_category',file:'inspection_category.html',title:'검사구분'},
-'검사실적등록':{id:'inspection_result_input',file:'inspection_result_input.html',title:'검사실적등록'},
+'검사실적등록':{id:'inspection_work_input',file:'inspection_work_input.html',title:'검사실적등록'},
+'검사결과 상세':{id:'inspection_result_input',file:'inspection_result_input.html',title:'검사결과 상세'},
 '검사항목':{id:'inspection_item_management',file:'inspection_item_management.html',title:'검사항목'},
 '공지사항 등록':{id:'notice_registration',file:'notice_registration.html',title:'공지사항 등록'},
 'DB 동기화':{id:'db_sync',file:'db_sync.html',title:'DB 동기화'},
@@ -387,6 +388,10 @@ const pageRegistry={
 '공정단가변동등록':{id:'process_price_change_registration',file:'process_price_change_registration.html',title:'공정단가변동 등록'},
 '공정단가변동현황':{id:'process_price_change_status',file:'process_price_change_status.html',title:'가공공정단가변동 현황'},
 '제조원가조회(실시간)':{id:'manufacturing_cost_inquiry',file:'manufacturing_cost_inquiry.html',title:'제조원가 조회'},
+'금형원가(내역)':{id:'inhouse_outsourcing_input',file:'inhouse_outsourcing_input.html',title:'금형원가(내역)'},
+'금형원가 내역(부품별)':{id:'job_cost_sheet',file:'job_cost_sheet.html',title:'금형원가 내역 (부품별)'},
+'업체별 가공비 합계':{id:'vendor_cost_summary',file:'vendor_cost_summary.html',title:'업체별 가공비 합계'},
+'작업단가':{id:'labor_rate_management',file:'labor_rate_management.html',title:'작업단가'},
 '수주등록':{id:'sale_order_input',file:'sale_order_input.html',title:'수주등록'},
 '수주현황':{id:'sale_order_status',file:'sale_order_status.html',title:'수주현황'},
 '제작계획등록':{id:'sales_plan_input',file:'sales_plan_input.html',title:'제작계획등록'},
@@ -420,7 +425,7 @@ const pageRegistry={
 'PartList 복사':{id:'partlist_copy',file:'partlist_copy.html',title:'PartList 복사'},
 '재고조회':{id:'stock_inquiry',file:'stock_inquiry.html',title:'재고조회'},
 '구매품 발주현황':{id:'purchase_order_status',file:'purchase_order_status.html',title:'구매품 발주/입고현황'},
-'외주가공 발주':{id:'outsourcing_order_input',file:'outsourcing_order_input.html',title:'외주가공 발주'},
+'사내외가공 발주':{id:'outsourcing_order_input',file:'outsourcing_order_input.html',title:'사내외가공 발주'},
 '외주가공 입고':{id:'outsourcing_receipt_input',file:'outsourcing_receipt_input.html',title:'외주가공 입고'},
 '외주가공 입고확정':{id:'outsourcing_receipt_confirmation',file:'outsourcing_receipt_confirmation.html',title:'외주가공입고확정'},
 '외주가공발주현황':{id:'outsourcing_order_status',file:'outsourcing_order_status.html',title:'외주가공 발주현황'},
@@ -506,7 +511,7 @@ function locate(name){
 /* v116: 메뉴 비활성화 — 목록에는 흐리게 남기고 열리지 않게 한다 (외주가공은 QR스캔·외주가공 발주 화면에서 입고/입고확정 처리) */
 /* v143: 원재료·구매품도 발주 화면에서 자재표 우클릭으로 입고·입고확정까지 처리하므로 같이 내린다 */
 const MENU_OFF=new Set(['외주가공 입고','외주가공 입고확정','공정이력카드','외주가공 QR스캔','수정요청게시판','사용자정보','DB 동기화','부서정보','직급정보',
- '원재료 입고','원재료 입고확정','구매품 입고','구매품 입고확정']);
+ '원재료 입고','원재료 입고확정','구매품 입고','구매품 입고확정','설계계획등록']);
 /* v148: 메뉴 숨김 — 목록에서 아예 빼고 열리지도 않게 한다.
    (비활성 MENU_OFF 는 흐리게 남지만, 이쪽은 보이지 않는다)
    가공계획등록: 외주가공 발주 화면에서 부품 행 우클릭 → 공정 편집으로 처리한다. */
@@ -682,7 +687,7 @@ function renderStage(){
 /* ---------- 홈 ---------- */
 function homeHTML(){
   const mods=visibleModules().filter(m=>m!=='사용메뉴얼');
-  const quick=['금형진척현황','수주등록','수주현황','제작계획등록','설계계획등록','구매품 발주','조립실적등록','외주가공 발주'].filter(n=>!isHidden(n));
+  const quick=['금형진척현황','수주등록','수주현황','제작계획등록','설계실적등록','구매품 발주','조립실적등록','사내외가공 발주'].filter(n=>!isHidden(n));
   return `<div class="home">
   <div class="card" style="grid-column:span 8"><h3>업무 모듈 <span>상단 메뉴에 마우스를 올리면 세부 메뉴가 열립니다</span></h3>
    <div class="modcard">${mods.map(m=>`<button onclick="pinModule('${m}')"><b>${MOD_ICON[m]||'▪'} ${esc(m)}</b><small>${esc(MOD_DESC[m]||'')}</small></button>`).join('')}</div></div>
