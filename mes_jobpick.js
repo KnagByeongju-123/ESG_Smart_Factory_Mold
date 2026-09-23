@@ -1,4 +1,4 @@
-/* mes_jobpick.js (v39)
+/* mes_jobpick.js (v170)
  * 제번을 손으로 타이핑해야 하는 화면(PartList 등록, 경비등록 등)에
  * 등록된 수주 제번 목록을 datalist 로 붙여 준다.
  *   MESJOB.attach('q_job', {onPick:fn})   → 입력칸 id 지정
@@ -38,11 +38,16 @@ async function attach(inputId,opt){
   dl.innerHTML=rs.map(r=>`<option value="${String(r.job_no).replace(/"/g,'')}">`+
     `${String(r.item_name||'').replace(/</g,'')}${r.customer_name?' · '+String(r.customer_name).replace(/</g,''):''}</option>`).join('');
   el.setAttribute('list',dlId);
+  /* v170: 공용 콤보가 이미 씌워졌으면 콤보 목록도 이 datalist 로 교체 */
+  if(el.__mescbBox){el.__mescbBox.dl=dl;el.setAttribute('data-list',dlId);el.removeAttribute('list')}
   el.setAttribute('placeholder',rs.length?`제번 선택/입력 (등록 ${rs.length}건)`:'등록된 수주가 없습니다');
   el.setAttribute('autocomplete','off');
   if(opt.onPick){
+    let last='',lastAt=0;   /* v170: input·change 연속 발생 시 한 번만 조회 */
     const fire=()=>{const v=(el.value||'').trim();
-      if(v&&rs.some(r=>String(r.job_no)===v))opt.onPick(v)};
+      if(!v||!rs.some(r=>String(r.job_no)===v))return;
+      if(v===last&&Date.now()-lastAt<500)return;
+      last=v;lastAt=Date.now();opt.onPick(v)};
     el.addEventListener('change',fire);
     el.addEventListener('input',()=>{const v=(el.value||'').trim();
       if(rs.some(r=>String(r.job_no)===v))fire()});

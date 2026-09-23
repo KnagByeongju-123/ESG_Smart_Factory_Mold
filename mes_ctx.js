@@ -407,7 +407,12 @@ window.MESCTX={confirm:dlgConfirm};
   if(el.tagName==='SELECT')
    return [...el.options].map(o=>({v:o.value,l:(o.textContent||o.value||'').trim(),s:''}))
      .filter(o=>o.v!==''||o.l!=='');
-  const dl=box.dl||document.getElementById(el.getAttribute('data-list')||'');
+  /* v170: 콤보가 만들어진 뒤 다른 모듈(mes_jobpick 등)이 list 를 다시 붙이면 그 목록으로 갈아탄다
+     (처음 잡힌 목록에 묶여 제번 필터가 'ETC' 1건만 보이던 문제) */
+  if(el.hasAttribute('list')){const n=el.getAttribute('list');el.setAttribute('data-list',n);el.removeAttribute('list');box.dl=document.getElementById(n)||box.dl}
+  const dl0=document.getElementById(el.getAttribute('data-list')||'');
+  const dl=(dl0&&dl0.options.length)?dl0:(box.dl||dl0);
+  if(dl&&dl!==box.dl)box.dl=dl;
   if(!dl)return [];
   return [...dl.options].map(o=>({v:o.value,l:o.value,s:(o.textContent||'').trim()}));
  }
@@ -462,7 +467,7 @@ window.MESCTX={confirm:dlgConfirm};
   }else if(t!==box.src.value)setVal(box,t,t);
  }
  function build(el){
-  if(el.__mescb||el.hasAttribute('data-nocombo'))return;
+  if(el.__mescb||el.hasAttribute('data-nocombo')||el.classList.contains('mescb-in'))return;
   const isSel=el.tagName==='SELECT';
   const dl=isSel?null:document.getElementById(el.getAttribute('list')||'');
   if(!isSel&&!dl)return;
@@ -1325,7 +1330,10 @@ window.MESCTX={confirm:dlgConfirm};
   if(!el||el.tagName!=='INPUT')return false;
   const t=(el.getAttribute('type')||'text').toLowerCase();
   if(t!=='text'&&t!=='search')return false;
-  if(el.readOnly||el.disabled||el.hasAttribute('list')||el.hasAttribute('data-nojoblist'))return false;
+  if(el.readOnly||el.disabled||el.hasAttribute('list')||el.hasAttribute('data-list')||el.hasAttribute('data-nojoblist'))return false;
+  if(el.__mesjob)return false;
+  /* v170: 콤보의 표시칸(.mescb-in)을 제번칸으로 오인해 콤보가 이중으로 씌워지던 문제 */
+  if(el.classList.contains('mescb-in')||el.__mescbBox)return false;   /* v170: mes_jobpick 이 붙인 칸(전체 수주 목록)은 건드리지 않는다 */
   if(el.closest('#meslk,#mesdlg,.mescb-pop'))return false;
   return true;
  }
@@ -1387,7 +1395,7 @@ window.MESCTX={confirm:dlgConfirm};
   if(btn)btn.click();
  }
  function attach(el,list){
-  if(el.__mesJob)return;el.__mesJob=1;
+  if(el.__mesJob||el.__mesjob)return;el.__mesJob=1;
   ensureDL(list);
   el.setAttribute('list',DLID);el.setAttribute('autocomplete','off');
   if(!el.getAttribute('placeholder')||/^제번$/.test(el.getAttribute('placeholder')))

@@ -641,7 +641,7 @@ function injectCtx(f){
   if(!doc||!doc.body)return;
   if(doc.__mesCtxInjected||doc.querySelector('script[src*="mes_ctx.js"]'))return;
   doc.__mesCtxInjected=1;
-  const s=doc.createElement('script');s.src='mes_ctx.js?v='+APP_VER;doc.body.appendChild(s);
+  const s=doc.createElement('script');s.src='mes_ctx.js?v=170'+APP_VER;doc.body.appendChild(s);
  }catch(e){}
 }
 const VREADY=new Set();let vwaitTimer=null,pendingId=null;
@@ -742,7 +742,7 @@ function prefetch(url){if(!url||_pf.has(url))return;_pf.add(url);
   try{const l=document.createElement('link');l.rel='prefetch';l.href=url;l.as='document';document.head.appendChild(l)}catch(e){}
   try{fetch(url,{cache:'force-cache'}).catch(()=>{})}catch(e){}}
 (window.requestIdleCallback||(f=>setTimeout(f,1200)))(()=>{
-  ['mes_db.js?v='+APP_VER,'mes_ctx.js?v='+APP_VER,'mes_lookup.js?v='+APP_VER,'mes_paste.js?v='+APP_VER].forEach(prefetch);
+  ['mes_db.js?v='+APP_VER,'mes_ctx.js?v=170'+APP_VER,'mes_lookup.js?v='+APP_VER,'mes_paste.js?v='+APP_VER].forEach(prefetch);
   let i=0;const hot=['sale_order_status.html','purchase_order_input.html','purchase_order_status.html','material_order_input.html','outsourcing_order_input.html','vendor_management.html','status_board.html'];
   const step=()=>{if(i>=hot.length)return;prefetch(hot[i++]+'?v='+APP_VER);setTimeout(step,600)};step()});
 
